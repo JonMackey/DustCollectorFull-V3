@@ -16,3 +16,6 @@ _DelSyncFiles
 SdFat
 RFM69_LowPowerLab
 SendOnlySoftwareSerial
+config.txt
+MCP2515 ID Notes.txt
+MyriadPro-Regular_36.h
