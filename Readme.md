@@ -7,4 +7,4 @@ The software covers two AVR boards, the controller and the sensor.
 The sensor board determines when a blast gate is open and sends message via CAN to the controller when the gate is opened or closed.  For a detailed description of the sensor, see my [Blast Gate Sensor](https://www.instructables.com/Blast-Gate-Sensor/) instructable.
 
 See my 
-[Dust Collector Monitor](https://www.instructables.com/Duct-Collector-Monitor/) for more information.
+[Dust Collector Monitor](https://www.instructables.com/Duct-Collector-Monitor/) instructable for more information.
