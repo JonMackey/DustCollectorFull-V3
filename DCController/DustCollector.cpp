@@ -132,7 +132,8 @@ void DustCollector::begin(void)
 	mRadio.initialize(RF69_433MHZ, DCConfig::kNodeID, DCConfig::kNetworkID);
 	
 	StopFlasher();
-	StopMotor();	// Stop before setting pinMode
+	mFaultAcknowledged = true;
+	StopDustBinMotor();	// Stop before setting pinMode
 	pinMode(DCConfig::kFlasherControlPin, OUTPUT);
 	pinMode(DCConfig::kMotorControlPin, OUTPUT);
 	
@@ -253,13 +254,14 @@ bool DustCollector::SaveCleanSet(void)
 	return(success);
 }
 
-/******************************** SaveCleanSet ********************************/
+/******************************** SaveDirtySet ********************************/
 bool DustCollector::SaveDirtySet(void)
 {
 	bool	success = mDCIsRunning;
 	if (success)
 	{
 		success = mGateSets.SaveDirtySet(mOpenGates, DeltaAverage());
+		mStatus = eFilterFull;	// No need to report the filter being full.
 	}
 	return(success);
 }
@@ -283,6 +285,16 @@ void DustCollector::RemoveGate(
 	}
 }
 
+/*************************** UserAcknowledgedFault ****************************/
+void DustCollector::UserAcknowledgedFault(void)
+{
+	if (!mFaultAcknowledged)
+	{
+		mFaultAcknowledged = true;
+		StopFlasher();
+	}
+}
+
 /******************************** StartFlasher ********************************/
 void DustCollector::StartFlasher(void)
 {
@@ -295,26 +307,54 @@ void DustCollector::StopFlasher(void)
 	digitalWrite(DCConfig::kFlasherControlPin, LOW);
 }
 
-/********************************* StartMotor *********************************/
-void DustCollector::StartMotor(void)
+/***************************** StartDustBinMotor ******************************/
+void DustCollector::StartDustBinMotor(void)
 {
 	digitalWrite(DCConfig::kMotorControlPin, HIGH);
 
 	mSampleCount = 0;
 	mSampleAccumulator = 0;
 	mRingBufIndex = 0;
+	mBinMotorAverage = 0;
 	// Give the motor 2 seconds to start before taking any readings.
 	mMotorSensePeriod.Set(2000);
 	mMotorSensePeriod.Start();
 }
 
-/********************************* StopMotor **********************************/
-void DustCollector::StopMotor(void)
+/****************************** StopDustBinMotor ******************************/
+void DustCollector::StopDustBinMotor(void)
 {
 	// Set the sense period to 0.
 	// This will stop sensing the motor.
 	mMotorSensePeriod.Set(0);
+	mBinMotorAverage = 0;
 	digitalWrite(DCConfig::kMotorControlPin, LOW);
+}
+
+/******************************* ToggleBinMotor *******************************/
+void DustCollector::ToggleBinMotor(void)
+{
+	if (mMotorSensePeriod.Get())
+	{
+		StopDustBinMotor();
+		SendAudioAlertMessage(DCConfig::kFullMessage);
+	} else
+	{
+		StartDustBinMotor();
+	}
+}
+
+/**************************** SetTriggerThreshold *****************************/
+void DustCollector::SetTriggerThreshold(
+	uint8_t	inTriggerThreshold)
+{
+	mTriggerThreshold = inTriggerThreshold;
+}
+
+/**************************** SaveTriggerThreshold ****************************/
+void DustCollector::SaveTriggerThreshold(void)
+{
+	EEPROM.put(DCConfig::kMotorTriggerThresholdAddr, mTriggerThreshold);
 }
 
 /*************************** SendAudioAlertMessage ****************************/
@@ -354,23 +394,36 @@ void DustCollector::CheckFilter(void)
 		mPressureUpdatePeriod.Start();
 	
 		/*
-			The mDeltaSum is the sum of the last 4 deltas.
-
-			The delta average is updated every 1.5 seconds.  This is the average
-			delta between the ambient and duct pressure readings when the dust
-			collector is off.  Four averages are maintained.  Each is an average
-			of the delta sum measured 1.5 seconds apart.
-
-			The storing of averages stop once the dust collector starts. To
-			detect when the dust collector starts the current mDeltaSum average
-			must increase by 25Pa over the oldest stored average.
+		*	The mDeltaSum is the sum of the last 4 deltas.
+		*
+		*	The delta average is updated every 1.5 seconds.  This is the average
+		*	delta between the ambient and duct pressure readings when the dust
+		*	collector is off.  Four averages are maintained.  Each is an average
+		*	of the delta sum measured 1.5 seconds apart.
+		*
+		*	The storing of averages stop once the dust collector starts. To
+		*	detect when the dust collector starts the current mDeltaSum average
+		*	must increase by 25Pa over the oldest stored average.
+		*
+		*	Note that the adjusted delta average is the delta average minus the
+		*	baseline (off state) average between the two pressure sensors. The
+		*	adjusted value is used when displaying the value to the user and
+		*	when determining when the collector is running.  For comparisons,
+		*	like determining when the filter is loaded, the simple delta average
+		*	is used because there is no need to subtract the baseline provided
+		*	the both readings being compared are based on the simple delta
+		*	average.  If both readings are +10Pa, who cares?  It's only when you
+		*	need to display the value that the baseline needs to be subtracted.
+		*
+		*	Whether to use the adjusted average may become an issue if the
+		*	baseline changes dramatically over time.
 		*/
 		// The expected delta is in the range of an signed 16 bit integer.
 		int32_t	thisDelta = abs(mDuctPressure - mAmbientPressure);
 		/*
-			When the pressure sensors start up, the first few deltas can be very
-			large.  At about the 4th reading the delta value becomes rational
-			for the expected dust collector off state. (a delta less than 200Pa)
+		*	When the pressure sensors start up, the first few deltas can be very
+		*	large.  At about the 4th reading the delta value becomes rational
+		*	for the expected dust collector off state. (a delta less than 200Pa)
 		*/
 		if (thisDelta < 1500)
 		{
@@ -424,7 +477,7 @@ void DustCollector::CheckFilter(void)
 					if (isRunning)
 					{
 						mStatus = eRunning;
-						StartMotor();
+						StartDustBinMotor();
 					/*
 					*	Else the dust collector just stopped.
 					*	Reset the delta averages.
@@ -437,7 +490,8 @@ void DustCollector::CheckFilter(void)
 						mDeltaSumLoaded = false;
 						mDeltaIndex = 0;
 						mDeltaAverageIndex = 0;
-						StopMotor();
+						mFaultAcknowledged = true;
+						StopDustBinMotor();
 						StopFlasher();
 					}
 				}
@@ -456,13 +510,18 @@ void DustCollector::CheckFilter(void)
 				*/
 				if (mStatus == eRunning)
 				{
-					if (deltaAverage > mGateSets.CurrentDirtyPressure())
+					/*
+					*	If the average is greater than or equal to the dirty pressure THEN
+					*	set the status to filter full, start flasher, send message.
+					*/
+					if (deltaAverage >= mGateSets.CurrentDirtyPressure())
 					{
 						mStatus = eFilterFull;
+						mFaultAcknowledged = false;
 						StartFlasher();
 						SendAudioAlertMessage(DCConfig::kFilterLoadedMessage);
 					}
-				} else
+				} else if (!mDCIsRunning)
 				{
 					// Set the oldest average to the newest.
 					mDeltaAverage[mDeltaAverageIndex & 3] = (int16_t)deltaAverage;
@@ -499,6 +558,7 @@ void DustCollector::CheckDustBinMotor(void)
 		{
 			mSampleAccumulator -= oldestReading;	// Remove the oldest reading
 			uint16_t average = mSampleAccumulator/SAMPLE_SIZE;
+			mBinMotorAverage = average;
 			/*
 			*	If the paddle motor doesn't have significant resistance THEN
 			*	setup the sense period to check the motor in a few ms.
@@ -512,7 +572,8 @@ void DustCollector::CheckDustBinMotor(void)
 			} else
 			{
 				mStatus = eBinFull;
-				StopMotor();
+				mFaultAcknowledged = false;
+				StopDustBinMotor();
 				StartFlasher();
 				SendAudioAlertMessage(DCConfig::kFullMessage);
 			}

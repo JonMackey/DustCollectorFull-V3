@@ -89,9 +89,9 @@ namespace DCConfig
 	
 	
 	// Dust bin motor
-	const uint8_t	kThresholdLowerLimit = 15;
-	const uint8_t	kDefaultTriggerThreshold = 30;
-	const uint8_t	kThresholdUpperLimit = 100;
+	const uint8_t	kThresholdLowerLimit = 5;
+	const uint8_t	kDefaultTriggerThreshold = 15;
+	const uint8_t	kThresholdUpperLimit = 50;
 	// Radio
 	const uint16_t	kNodeID		= 56;	// Unique for each node on same network
 	const uint8_t	kNetworkID	= 100;	// The same on all nodes that talk to each other
@@ -113,7 +113,11 @@ namespace DCConfig
 	const uint8_t	kMaxGates = 32;
 	const uint8_t	kMaxGateSets = 32;
 	const uint32_t	kDefaultCleanDelta = 249; // Pa = ~1" water
-	const uint32_t	kDefaultDirtyDelta = 747; // Pa = ~3" water
+	/*
+	*	The dirty delta is set high so that the collector doesn't go into an
+	*	error state when no gate sets are defined.
+	*/
+	const uint32_t	kDefaultDirtyDelta = 1245; // Pa = ~5" water
 	
 }
 

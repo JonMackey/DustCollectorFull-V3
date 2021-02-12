@@ -25,19 +25,28 @@
 #include "DustCollector.h"
 #include "DustCollectorUI.h"
 #include "UnixTimeEditor.h"
-#include "DCConfig.h"
 
 
 bool DustCollectorUI::sSDInsertedOrRemoved;
 bool DustCollectorUI::sButtonPressed;
 
 
-const char kInfoStr[] PROGMEM = "INFO";
 const char kGateSensorsStr[] PROGMEM = "GATE SENSORS";
 const char kGateSetsStr[] PROGMEM = "GATE SETS";
 const char kSetTimeStr[] PROGMEM = "SET TIME";
-const char kEnableSleepStr[] PROGMEM = "ENABLE SLEEP";
-const char kDisableSleepStr[] PROGMEM = "DISABLE SLEEP";
+const char kSleepStr[] PROGMEM = "SLEEP";
+const char kEnabledStr[] PROGMEM = "ENABLD";
+const char kDisabledStr[] PROGMEM = "DISABLD";
+
+const char kBinMotorStr[] PROGMEM = "BIN MOTOR";
+const char kSensitivityStr[] PROGMEM = "SENSITIVITY";
+const char kMinusSignStr[] PROGMEM = "-";
+const char kPlusSignStr[] PROGMEM = "+";
+const char kSaveStr[] PROGMEM = "SAVE";
+const char kMotorStr[] PROGMEM = "MOTOR";
+const char kCurrentStr[] PROGMEM = "CURRENT ";
+const char kOffStr[] PROGMEM = "OFF";
+const char kOnStr[] PROGMEM = "ON";
 
 // Gate Sensors menu items
 const char kSaveToSDStr[] PROGMEM = "SAVE TO SD";
@@ -93,12 +102,12 @@ const char kDustBinFullStr[] PROGMEM = "DUST BIN FULL";
 const char kFilterLoadedStr[] PROGMEM = "FILTER LOADED";
 
 
-struct SString_PDesc
+struct SStringDesc
 {
 	const char*	descStr;
 	uint16_t	color;
 };
-const SString_PDesc kTextDesc[] PROGMEM =
+const SStringDesc kTextDesc[] PROGMEM =
 {
 	{kNoMessageStr, XFont::eWhite},
 	{kSavedStr, XFont::eGreen},
@@ -121,12 +130,10 @@ const SString_PDesc kTextDesc[] PROGMEM =
 	{kOpenStr, XFont::eGreen},
 	{kErrorStr, XFont::eRed},
 	// Main Menu items
-	{kInfoStr, XFont::eWhite},
 	{kGateSensorsStr, XFont::eWhite},
 	{kGateSetsStr, XFont::eWhite},
 	{kSetTimeStr, XFont::eWhite},
-	{kEnableSleepStr, XFont::eWhite},
-	{kDisableSleepStr, XFont::eWhite},
+	{kSleepStr, XFont::eWhite},
 	// Gate Sensors menu items
 	{kSaveToSDStr, XFont::eWhite},
 	{kLoadFromSDStr, XFont::eWhite},
@@ -144,7 +151,15 @@ const SString_PDesc kTextDesc[] PROGMEM =
 	// Resolve unregistered gate
 	{kRegisterStr, XFont::eWhite},
 	{kGateAsStr, XFont::eWhite},
-	{kNewStr, XFont::eGreen}
+	{kNewStr, XFont::eGreen},
+	// Bin Motor items
+	{kBinMotorStr, XFont::eWhite},
+	{kSensitivityStr, XFont::eWhite},
+	{kSaveStr, XFont::eGreen},
+	{kMotorStr, XFont::eWhite},
+	{kCurrentStr, XFont::eWhite},
+	{kOffStr, XFont::eRed},
+	{kOnStr, XFont::eGreen}
 };
 
 #define DEBOUNCE_DELAY	20	// ms
@@ -218,7 +233,7 @@ void DustCollectorUI::begin(
 }
 
 const uint8_t	DustCollectorUI::kNextInfoField[] = {eInfoField0, 0, 0, eInfoField1, eGateNameField};
-const uint8_t	DustCollectorUI::kPrevInfoField[] = {eInfoItem, 0, 0, eGateNameField, eInfoField0};
+const uint8_t	DustCollectorUI::kPrevInfoField[] = {eGateNamesItem, 0, 0, eGateNameField, eInfoField0};
 /**************************** UpDownButtonPressed *****************************/
 void DustCollectorUI::UpDownButtonPressed(
 	bool	inIncrement)
@@ -241,21 +256,29 @@ void DustCollectorUI::UpDownButtonPressed(
 					mCurrentFieldOrItem++;
 				} else
 				{
-					mCurrentFieldOrItem = eInfoItem;
+					mCurrentFieldOrItem = eGateNamesItem;
 				}
-			} else if (mCurrentFieldOrItem > eInfoItem)
+			} else if (mCurrentFieldOrItem > eGateNamesItem)
 			{
 				mCurrentFieldOrItem--;
+			/*
+			*	Else when pressing up from the top line, go to the info screen
+			*/
 			} else
 			{
-				mCurrentFieldOrItem = eEnableSleepItem;
+				//mCurrentFieldOrItem = eGateNameField;	same as eGateNamesItem
+				mode = eInfoMode;
 			}
 			break;
 		case eInfoMode:
+			/*
+			*	If pressing up from the top line THEN
+			*	go to the main screen
+			*/
 			if (mCurrentFieldOrItem == eGateNameField &&
 				inIncrement == false)
 			{
-				//mCurrentFieldOrItem = eInfoItem;	same as eGateNameField
+				//mCurrentFieldOrItem = eGateNamesItem;	same as eGateNameField
 				mode = eMainMenuMode;
 			} else
 			{
@@ -305,6 +328,34 @@ void DustCollectorUI::UpDownButtonPressed(
 			// The only way to get out of eSetTimeMode is to press enter.
 			mUnixTimeEditor.UpDownButtonPressed(inIncrement);
 			break;
+		case eBinMotorMode:
+			if (inIncrement)
+			{
+				if (mCurrentFieldOrItem < eMotorControlItem)
+				{
+					mCurrentFieldOrItem++;
+				} else
+				{
+					mCurrentFieldOrItem = eMotorSensitivityItem;
+				}
+			} else if (mCurrentFieldOrItem > eMotorSensitivityItem)
+			{
+				mCurrentFieldOrItem--;
+			} else
+			{
+				mCurrentFieldOrItem = eBinMotorItem;
+				mode = eMainMenuMode;
+				// When exiting the bin motor panel, don't leave the motor
+				// running if the collector is off.
+				if (mDustCollector->BinMotorIsRunning() &&
+					!mDustCollector->DCIsRunning())
+				{
+					mDustCollector->ToggleBinMotor();
+				}
+				// Restore the saved threshold.
+				mDustCollector->SetTriggerThreshold(mSavedMotorThreshold);
+			}
+			break;
 		case eVerifyResetGatesMode:
 		case eVerifyGateRemovalMode:
 		case eVerifyResetGateSetsMode:
@@ -322,16 +373,19 @@ void DustCollectorUI::EnterPressed(void)
 		case eMainMenuMode:
 			if (mCurrentFieldOrItem < eEnableSleepItem)
 			{
-				mMode = mCurrentFieldOrItem+1;
+				mMode = mCurrentFieldOrItem+2;
 				mCurrentFieldOrItem = 0;
 				if (mMode == eSetTimeMode)
 				{
 					mUnixTimeEditor.SetTime(UnixTime::Time());
+				} else if (mMode == eBinMotorMode)
+				{
+					mCurrentFieldOrItem = eMotorSensitivityItem;
+					mSavedMotorThreshold = mDustCollector->GetTriggerThreshold();
 				}
 			} else
 			{
 				mSleepEnabled = !mSleepEnabled;
-				mPrevMode = eInfoMode;	// To force a redraw
 			}
 			break;
 		case eInfoMode:
@@ -475,6 +529,16 @@ void DustCollectorUI::EnterPressed(void)
 				mCurrentFieldOrItem = eSetTimeItem;
 			}
 			break;
+		case eBinMotorMode:
+			if (mCurrentFieldOrItem == eSaveSensitivityItem)
+			{
+				mDustCollector->SaveTriggerThreshold();
+				mSavedMotorThreshold = mDustCollector->GetTriggerThreshold();
+			} else if (mCurrentFieldOrItem == eMotorControlItem)
+			{
+				mDustCollector->ToggleBinMotor();
+			}
+			break;
 		case eVerifyResetGatesMode:
 			if (mCurrentFieldOrItem == eVerifyYesItem)
 			{
@@ -499,6 +563,7 @@ void DustCollectorUI::EnterPressed(void)
 			GoToInfoMode();
 			break;
 		case eMessageMode:
+			mDustCollector->UserAcknowledgedFault();
 			if (mMessageReturnMode == eInfoMode)
 			{
 				GoToInfoMode();
@@ -536,6 +601,12 @@ void DustCollectorUI::LeftRightButtonPressed(
 {
 	switch (mMode)
 	{
+		case eMainMenuMode:
+			if (mCurrentFieldOrItem == eEnableSleepItem)
+			{
+				mSleepEnabled = !mSleepEnabled;
+			}
+			break;
 		case eInfoMode:
 			switch(mCurrentFieldOrItem)
 			{
@@ -553,6 +624,26 @@ void DustCollectorUI::LeftRightButtonPressed(
 			break;
 		case eSetTimeMode:
 			mUnixTimeEditor.LeftRightButtonPressed(inIncrement);
+			break;
+		case eBinMotorMode:
+			if (mCurrentFieldOrItem == eMotorSensitivityItem)
+			{
+				uint8_t	newMotorThreshold = mDustCollector->GetTriggerThreshold();
+				if (inIncrement)
+				{
+					if (newMotorThreshold < DCConfig::kThresholdUpperLimit)
+					{
+						newMotorThreshold++;
+					}
+				} else if (newMotorThreshold > DCConfig::kThresholdLowerLimit)
+				{
+					newMotorThreshold--;
+				}
+				mDustCollector->SetTriggerThreshold(newMotorThreshold);
+			} else if (mCurrentFieldOrItem == eMotorControlItem)
+			{
+				mDustCollector->ToggleBinMotor();
+			}
 			break;
 		case eResolveUnregisteredGateMode:
 			mCurrentUnresponsiveGateIndex =
@@ -597,7 +688,15 @@ void DustCollectorUI::Update(void)
 		if (mPrevStatus != status)
 		{
 			mPrevStatus = status;
-			if (status > DustCollector::eRunning)
+			/*
+			*	If the dust collector is running AND
+			*	the status changed to "bin full" or "filter loaded" THEN
+			*	display warning message.
+			*	(Otherwise the status change was from the bin motor panel, the
+			*	user testing the motor.)
+			*/
+			if (mDustCollector->DCIsRunning() &&
+				status > DustCollector::eRunning)
 			{
 				QueueMessage(status == DustCollector::eBinFull ?
 					eDustBinFullMessage : eFilterLoadedMessage, eNoMessage,
@@ -835,12 +934,18 @@ void DustCollectorUI::UpdateDisplay(void)
 				if (updateAll)
 				{
 					DrawCenteredList(0,
-						eInfoItemDesc,
 						eGateSensorsItemDesc,
 						eGateSetsItemDesc,
 						eSetTimeItemDesc,
-						mSleepEnabled ? eDisableSleepItemDesc : eEnableSleepItemDesc,
+						eBinMotorDesc,
 						eTextListEnd);
+						DrawDescP(4, eSleepItemDesc);
+				}
+				if (updateAll ||
+					mPrevSleepEnabled != mSleepEnabled)
+				{
+					mPrevSleepEnabled = mSleepEnabled;
+					DrawItemP(4, mSleepEnabled ? kEnabledStr : kDisabledStr, eMagenta, 98, true);
 				}
 				break;
 			}
@@ -918,6 +1023,45 @@ void DustCollectorUI::UpdateDisplay(void)
 			case eSetTimeMode:
 				mUnixTimeEditor.Update();
 				break;
+			case eBinMotorMode:
+			{
+				char	valueStr[15];
+				if (updateAll)
+				{
+					DrawCenteredDescP(0, eSensitivityDesc);
+					DrawDescP(2, eSaveDesc);
+					DrawDescP(3, eMotorDesc);
+					DrawDescP(4, eCurrentDesc);
+				}
+				
+				uint8_t	motorThreshold = mDustCollector->GetTriggerThreshold();
+				if (updateAll ||
+					mPrevMotorThreshold != motorThreshold)
+				{
+					mPrevMotorThreshold = motorThreshold;
+					DrawItemP(1, kMinusSignStr, eWhite, DCConfig::kTextInset + 10, true);
+					SetTextColor(eMagenta);
+					UInt8ToDecStr(motorThreshold, valueStr);
+					DrawCentered(valueStr);
+					DrawItemP(1, kPlusSignStr, eWhite, 240 - DCConfig::kTextInset - 31);
+				}
+				bool	binMotorIsRunning = mDustCollector->BinMotorIsRunning();
+				if (updateAll ||
+					mPrevBinMotorIsRunning != binMotorIsRunning)
+				{
+					mPrevBinMotorIsRunning = binMotorIsRunning;
+					DrawDescP(3, binMotorIsRunning ? eOnDesc : eOffDesc, 134, true);
+				}
+				uint8_t	binMotorReading = mDustCollector->GetBinMotorReading();
+				if (updateAll ||
+					mPrevBinMotorReading != binMotorReading)
+				{
+					mPrevBinMotorReading = binMotorReading;
+					UInt8ToDecStr(binMotorReading, valueStr);
+					DrawItem(4, valueStr, eYellow, 160, true);
+				}
+				break;
+			}
 			case eVerifyResetGatesMode:
 			case eVerifyGateRemovalMode:
 			case eVerifyResetGateSetsMode:
@@ -1059,20 +1203,125 @@ void DustCollectorUI::DrawCenteredList(
 	uint8_t		inLine,
 	uint8_t		inTextEnum, ...)
 {
-	uint16_t		row = (inLine*DCConfig::kFontHeight) + DCConfig::kTextVOffset;
-	
-	SString_PDesc	textDesc;
-	char	textStr[15];
 	va_list arglist;
 	va_start(arglist, inTextEnum);
 	for (uint8_t textEnum = inTextEnum; textEnum; textEnum = va_arg(arglist, int))
 	{
-		mDisplay->MoveToRow(row);
-		row += DCConfig::kFontHeight;
-		memcpy_P(&textDesc, &kTextDesc[textEnum-1], sizeof(SString_PDesc));
-		strcpy_P(textStr, textDesc.descStr);
-		SetTextColor(textDesc.color);
-		DrawCentered(textStr);
+		DrawCenteredDescP(inLine, textEnum);
+		inLine++;
 	}
 	va_end(arglist);
 }
+
+/***************************** DrawCenteredDescP ******************************/
+void DustCollectorUI::DrawCenteredDescP(
+	uint8_t		inLine,
+	uint8_t		inTextEnum)
+{
+	SStringDesc	textDesc;
+	memcpy_P(&textDesc, &kTextDesc[inTextEnum-1], sizeof(SStringDesc));
+	DrawCenteredItemP(inLine, textDesc.descStr, textDesc.color);
+}
+
+/********************************* DrawDescP **********************************/
+void DustCollectorUI::DrawDescP(
+	uint8_t		inLine,
+	uint8_t		inTextEnum,
+	uint8_t		inColumn,
+	bool		inClearTillEOL)
+{
+	SStringDesc	textDesc;
+	memcpy_P(&textDesc, &kTextDesc[inTextEnum-1], sizeof(SStringDesc));
+	DrawItemP(inLine, textDesc.descStr, textDesc.color, inColumn, inClearTillEOL);
+}
+
+/***************************** DrawCenteredItemP ******************************/
+void DustCollectorUI::DrawCenteredItemP(
+	uint8_t		inLine,
+	const char*	inTextStrP,
+	uint16_t	inColor)
+{
+	char			textStr[20];	// Assumed all strings are less than 20 bytes
+	strcpy_P(textStr, inTextStrP);
+	DrawCenteredItem(inLine, textStr, inColor);
+}
+
+/****************************** DrawCenteredItem ******************************/
+void DustCollectorUI::DrawCenteredItem(
+	uint8_t		inLine,
+	const char*	inTextStr,
+	uint16_t	inColor)
+{
+	mDisplay->MoveToRow((inLine*DCConfig::kFontHeight) + DCConfig::kTextVOffset);
+	SetTextColor(inColor);
+	DrawCentered(inTextStr);
+}
+
+/********************************* DrawItemP **********************************/
+void DustCollectorUI::DrawItemP(
+	uint8_t		inLine,
+	const char*	inTextStrP,
+	uint16_t	inColor,
+	uint8_t		inColumn,
+	bool		inClearTillEOL)
+{
+	char	textStr[20];	// Assumed all strings are less than 20 bytes
+	strcpy_P(textStr, inTextStrP);
+	DrawItem(inLine, textStr, inColor, inColumn, inClearTillEOL);
+}
+
+/********************************** DrawItem **********************************/
+void DustCollectorUI::DrawItem(
+	uint8_t		inLine,
+	const char*	inTextStr,
+	uint16_t	inColor,
+	uint8_t		inColumn,
+	bool		inClearTillEOL)
+{
+	mDisplay->MoveTo((inLine*DCConfig::kFontHeight) + DCConfig::kTextVOffset, inColumn);
+	SetTextColor(inColor);
+	DrawStr(inTextStr, inClearTillEOL);
+}
+
+/******************************* DrawItemValueP *******************************/
+/*
+*	Draws from the current row and column, then erases till end of line.
+*/
+void DustCollectorUI::DrawItemValueP(
+	const char*	inTextStrP,
+	uint16_t	inColor)
+{
+	char	textStr[20];	// Assumed all strings are less than 20 bytes
+	strcpy_P(textStr, inTextStrP);
+	SetTextColor(inColor);
+	DrawStr(textStr, true);
+}
+
+/******************************* UInt8ToDecStr ********************************/
+/*
+*	Returns the pointer to the char after the last char (the null terminator)
+*/
+char* DustCollectorUI::UInt8ToDecStr(
+	uint8_t	inNum,
+	char*	inBuffer)
+{
+	if (inNum == 0)
+	{
+		*(inBuffer++) = '0';
+	} else
+	{
+		int8_t num = inNum;
+		for (; num/=10; inBuffer++){}
+		char*	bufPtr = inBuffer;
+		while (inNum)
+		{
+			*(bufPtr--) = (inNum % 10) + '0';
+			inNum /= 10;
+		}
+		inBuffer++;
+	}
+	*inBuffer = 0;
+	
+	return(inBuffer);
+}
+

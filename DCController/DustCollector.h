@@ -67,6 +67,7 @@ public:
 
 	uint8_t					Status(void) const
 								{return(mStatus);}
+	void					UserAcknowledgedFault(void);
 	uint32_t				AmbientPressure(void) const
 								{return(mAmbientPressure);}
 	uint32_t				DuctPressure(void) const
@@ -77,6 +78,12 @@ public:
 								{return(mDeltaAveragesLoaded);}
 	bool					DCIsRunning(void) const
 								{return(mDCIsRunning);}
+	bool					BinMotorIsRunning(void) const
+								{return(mMotorSensePeriod.Get() != 0);}
+							// Start/Stop motor from UI
+	void					ToggleBinMotor(void);
+	uint8_t					GetBinMotorReading(void) const
+								{return(mBinMotorAverage);}
 	int32_t					Baseline(void) const
 								{return(mDeltaAverage[mDeltaAverageIndex & 3]);}
 							// The adjusted delta average
@@ -145,6 +152,12 @@ public:
 								uint16_t				inRecIndex) const;
 	bool					GateCheckDone(void) const
 								{return(mGateCheckDone);}
+	uint8_t					GetTriggerThreshold(void) const
+								{return(mTriggerThreshold);}
+	void					SetTriggerThreshold(
+								uint8_t					inTriggerThreshold);
+	void					SaveTriggerThreshold(void);	// Save to EEPROM
+								
 #if 0
 	void					DoSerial(void);
 #endif
@@ -163,6 +176,7 @@ protected:
 	bool		mDeltaAveragesLoaded;
 	bool		mDCIsRunning;
 	bool		mGateCheckDone;
+	bool		mFaultAcknowledged;
 	BMP280SPI	mBMP280Ambient;
 	BMP280SPI	mBMP280Duct;
 	RFM69		mRadio;
@@ -184,6 +198,7 @@ protected:
 	uint16_t	mSampleAccumulator;
 
 	uint8_t		mTriggerThreshold;
+	uint8_t		mBinMotorAverage;	// used by Bin Motor panel UI
 	
 	struct SCANMessageQueueElement
 	{
@@ -212,8 +227,8 @@ protected:
 								CANFrame&				inCANFrame);
 	void					StartFlasher(void);
 	void					StopFlasher(void);
-	void					StartMotor(void);
-	void					StopMotor(void);
+	void					StartDustBinMotor(void);
+	void					StopDustBinMotor(void);
 	void					QueueCANMessage(
 								uint32_t				inID,
 								uint16_t				inCommand);

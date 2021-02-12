@@ -32,6 +32,7 @@
 #include "UnixTimeEditor.h"
 #include "DCInfoField.h"
 #include "AnimatedFontIcon.h"
+#include "DCConfig.h"
 
 class DustCollector;
 
@@ -73,7 +74,12 @@ protected:
 	bool					mDisplaySleeping;
 	bool					mIgnoreButtonPress;
 	bool					mSleepEnabled;
+	bool					mPrevSleepEnabled;
+	bool					mPrevBinMotorIsRunning;
 	uint8_t					mSelectionIndex;
+	uint8_t					mSavedMotorThreshold;
+	uint8_t					mPrevMotorThreshold;
+	uint8_t					mPrevBinMotorReading;
 	Font*					mNormalFont;
 	Rect8_t					mSelectionRect;
 	uint8_t					mMessageLine0;
@@ -118,6 +124,40 @@ protected:
 	void					DrawCenteredList(
 								uint8_t					inLine,
 								uint8_t					inTextEnum, ...);
+	void					DrawCenteredDescP(
+								uint8_t					inLine,
+								uint8_t					inTextEnum);
+	void					DrawCenteredItemP(
+								uint8_t					inLine,
+								const char*				inTextPStr,
+								uint16_t				inColor);
+	void					DrawCenteredItem(
+								uint8_t					inLine,
+								const char*				inTextStr,
+								uint16_t				inColor);
+	void					DrawDescP(
+								uint8_t					inLine,
+								uint8_t					inTextEnum,
+								uint8_t					inColumn = DCConfig::kTextInset,
+								bool					inClearTillEOL = false);
+	void					DrawItemP(
+								uint8_t					inLine,
+								const char*				inTextPStr,
+								uint16_t				inColor,
+								uint8_t					inColumn = DCConfig::kTextInset,
+								bool					inClearTillEOL = false);
+	void					DrawItemValueP(
+								const char*				inTextPStr,
+								uint16_t				inColor);
+	void					DrawItem(
+								uint8_t					inLine,
+								const char*				inTextStr,
+								uint16_t				inColor,
+								uint8_t					inColumn = DCConfig::kTextInset,
+								bool					inClearTillEOL = false);
+	static char*			UInt8ToDecStr(
+								uint8_t					inNum,
+								char*					inBuffer);
 	void					UpdateSelectionFrame(void);
 	void					HideSelectionFrame(void);
 	void					InitializeSelectionRect(void);
@@ -134,6 +174,7 @@ protected:
 		eGateSensorsMode,
 		eGateSetsMode,
 		eSetTimeMode,
+		eBinMotorMode,
 		eVerifyResetGatesMode,
 		eVerifyResetGateSetsMode,
 		eMessageMode,
@@ -144,10 +185,10 @@ protected:
 	
 	enum EMainMenuItem
 	{
-		eInfoItem,
 		eGateNamesItem,
 		eGateSetsItem,
 		eSetTimeItem,
+		eBinMotorItem,
 		eEnableSleepItem
 	};
 	enum EInfoField
@@ -185,6 +226,14 @@ protected:
 		eResolutionItem,
 		eDoResolutionItem
 	};
+	enum EBinMotorMenuItem
+	{
+		eSensitivityTitleItem,
+		eMotorSensitivityItem,
+		eSaveSensitivityItem,
+		eMotorControlItem,
+		eMotorValueItem
+	};
 	enum EMessageItem
 	{
 		eMessage0Item,
@@ -217,12 +266,10 @@ protected:
 		eErrorStateDesc,
 		eErrorMessage = eErrorStateDesc, 	// Also reused as a message
 		// Main Menu items
-		eInfoItemDesc,
 		eGateSensorsItemDesc,
 		eGateSetsItemDesc,
 		eSetTimeItemDesc,
-		eEnableSleepItemDesc,
-		eDisableSleepItemDesc,
+		eSleepItemDesc,
 		// Gate Sensors menu items
 		eSaveToSDItemDesc,
 		eLoadFromSDItemDesc,
@@ -240,7 +287,15 @@ protected:
 		// Resolve unregistered gate
 		eRegisterItemDesc,
 		eGateAsItemDesc,
-		eNewItemDesc
+		eNewItemDesc,
+		// Bin Motor items
+		eBinMotorDesc,
+		eSensitivityDesc,
+		eSaveDesc,
+		eMotorDesc,
+		eCurrentDesc,
+		eOffDesc,
+		eOnDesc
 	};
 };
 
