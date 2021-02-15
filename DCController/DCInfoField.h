@@ -24,6 +24,7 @@
 
 #include <inttypes.h>
 #include "XFont.h"
+#include "DCConfig.h"
 
 typedef uint32_t time32_t;
 class DustCollector;
@@ -44,6 +45,9 @@ public:
 	void					IncrementField(
 								bool					inIncrement);
 	void					SetPreset(void);
+	static char*			UInt8ToDecStr(
+								uint8_t					inNum,
+								char*					inBuffer);
 	enum EDCInfo
 	{
 		eNothingInfo,
@@ -54,6 +58,7 @@ public:
 		eStaticInchesInfo,
 		eTimeInfo,
 		eDateInfo,
+		eCurrentGateSet,
 		eInfoCount
 	};
 	
@@ -65,6 +70,8 @@ protected:
 	uint8_t				mDCInfo;
 	uint8_t				mPresetAddr;
 	uint8_t				mPrevDCInfo;
+	uint8_t				mPrevGateSetIndex;
+	bool				mPrevGateSetMatch;
 	uint32_t			mPrevAmbientPressure;
 	uint32_t			mPrevDuctPressure;
 	time32_t			mPrevDate;
@@ -72,8 +79,11 @@ protected:
 	void					DrawPressure(
 								int32_t					inPressure,
 								uint16_t				inColor);
-	void					MoveToTextTopLeft(void);
+	void					MoveToTextTopLeft(
+							uint8_t						inColumn = DCConfig::kTextInset);
 	void					DrawWaiting(void);
+	void					DrawItemP(
+								const char*				inTextStrP);
 };
 
 #endif // DCInfoField_h

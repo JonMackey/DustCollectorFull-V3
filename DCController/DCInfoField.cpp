@@ -26,11 +26,15 @@
 #include "DustCollector.h"
 #include "BMP280Utils.h"
 #include "UnixTime.h"
-#include "DCConfig.h"
 
 const char kTitleChars[] PROGMEM = " DABSS";
 const char khPaSuffixStr[] PROGMEM = "hPa";
 const char kInchesSuffixStr[] PROGMEM = "\"";
+const char kUsingStr[] PROGMEM = "USING";
+const char kExactStr[] PROGMEM = "EXACT";
+const char kDefaultStr[] PROGMEM = "DEFAULT";
+const char kGateSetPrefixStr[] PROGMEM = "GS:";
+
 
 /******************************** DCInfoField *********************************/
 DCInfoField::DCInfoField(void)
@@ -126,11 +130,21 @@ void DCInfoField::DrawWaiting(void)
 }
 
 /***************************** MoveToTextTopLeft ******************************/
-void DCInfoField::MoveToTextTopLeft(void)
+void DCInfoField::MoveToTextTopLeft(
+	uint8_t	inColumn)
 {
 	mXFont->GetDisplay()->MoveTo((mTextLine*DCConfig::kFontHeight) +
 								DCConfig::DCInfoOffset + DCConfig::kTextVOffset,
-								DCConfig::kTextInset);
+								inColumn);
+}
+
+/********************************* DrawItemP **********************************/
+void DCInfoField::DrawItemP(
+	const char*	inTextStrP)
+{
+	char	textStr[20];	// Assumed all strings are less than 20 bytes
+	strcpy_P(textStr, inTextStrP);
+	mXFont->DrawStr(textStr);
 }
 
 /*********************************** Update ***********************************/
@@ -174,11 +188,13 @@ void DCInfoField::Update(
 				mXFont->DrawRightJustified(titleStr, 31+DCConfig::kTextInset);
 			}
 			{
-				char suffixStr[5];
 				mXFont->GetDisplay()->MoveToColumn(162);
-				strcpy_P(suffixStr, mDCInfo != eStaticInchesInfo ? khPaSuffixStr : kInchesSuffixStr);
-				mXFont->DrawStr(suffixStr);
+				DrawItemP(mDCInfo != eStaticInchesInfo ? khPaSuffixStr : kInchesSuffixStr);
 			}
+		} else if (mDCInfo == eCurrentGateSet)
+		{
+			mXFont->GetDisplay()->MoveToColumn(DCConfig::kTextInset);
+			DrawItemP(kGateSetPrefixStr);
 		}
 	}
 	switch (mDCInfo)
@@ -300,5 +316,66 @@ void DCInfoField::Update(
 			}
 			break;
 		}
+		case eCurrentGateSet:
+		{
+			GateSets&	gateSets = mDustCollector->GetGateSets();
+			uint8_t	currentGateSetIndex = gateSets.GetCurrentIndex();
+			bool gateSetMatch = currentGateSetIndex > 0 && mDustCollector->OpenGates() == gateSets.GetCurrent().gatesMask;
+			if (inUpdateAll ||
+				mPrevGateSetIndex != currentGateSetIndex ||
+				mPrevGateSetMatch != gateSetMatch)
+			{
+				char	valueStr[15];
+				const char*	setUsedStatusPtr;
+				mPrevGateSetIndex = currentGateSetIndex;
+				mPrevGateSetMatch = gateSetMatch;
+				MoveToTextTopLeft(DCConfig::kTextInset + 56);
+				if (currentGateSetIndex)
+				{
+					char*	valueSuffixPtr = UInt8ToDecStr(currentGateSetIndex, valueStr);
+					*(valueSuffixPtr++) = ',';
+					*valueSuffixPtr = 0;
+					mXFont->SetTextColor(XFont::eWhite);
+					mXFont->DrawStr(valueStr, true);
+					mXFont->SetTextColor(gateSetMatch ? XFont::eGreen : XFont::eYellow);
+					mXFont->GetDisplay()->MoveToColumn(DCConfig::kTextInset + 107);
+					setUsedStatusPtr = gateSetMatch ? kExactStr : kUsingStr;
+				} else
+				{
+					mXFont->SetTextColor(XFont::eYellow);
+					setUsedStatusPtr = kDefaultStr;
+				}
+				DrawItemP(setUsedStatusPtr);
+			}
+			break;
+		}
 	}
+}
+
+/******************************* UInt8ToDecStr ********************************/
+/*
+*	Returns the pointer to the char after the last char (the null terminator)
+*/
+char* DCInfoField::UInt8ToDecStr(
+	uint8_t	inNum,
+	char*	inBuffer)
+{
+	if (inNum == 0)
+	{
+		*(inBuffer++) = '0';
+	} else
+	{
+		int8_t num = inNum;
+		for (; num/=10; inBuffer++){}
+		char*	bufPtr = inBuffer;
+		while (inNum)
+		{
+			*(bufPtr--) = (inNum % 10) + '0';
+			inNum /= 10;
+		}
+		inBuffer++;
+	}
+	*inBuffer = 0;
+	
+	return(inBuffer);
 }

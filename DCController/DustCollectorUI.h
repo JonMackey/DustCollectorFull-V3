@@ -110,6 +110,12 @@ protected:
 	void					SetSDCardPresent(
 								bool					inSDCardPresent);
 	void					EnterPressed(void);
+	bool					IncDecCurrentFieldOrItem(
+								bool					inIncrement,
+								uint8_t					inFirstItem,
+								uint8_t					inLastItem,
+								uint8_t					inParentMode,
+								uint8_t					inParentModeItem);
 	void					UpDownButtonPressed(
 								bool					inIncrement);
 	void					LeftRightButtonPressed(
@@ -155,9 +161,6 @@ protected:
 								uint16_t				inColor,
 								uint8_t					inColumn = DCConfig::kTextInset,
 								bool					inClearTillEOL = false);
-	static char*			UInt8ToDecStr(
-								uint8_t					inNum,
-								char*					inBuffer);
 	void					UpdateSelectionFrame(void);
 	void					HideSelectionFrame(void);
 	void					InitializeSelectionRect(void);
@@ -201,17 +204,17 @@ protected:
 	};
 	enum EGateSensorsMenuItem
 	{
-		eResetItem,
 		eCheckGatesItem,
 		eSaveNamesToSDItem,
-		eLoadNamesFromSDItem
+		eLoadNamesFromSDItem,
+		eResetItem
 	};
 	enum EGateSetsMenuItem
 	{
 		eSaveCleanSetItem,
 		eSaveDirtySetItem,
-		eResetSetsItem,
-		eSaveSetsToSDItem
+		eSaveSetsToSDItem,
+		eResetSetsItem
 	};
 	enum EVerifyResetItem
 	{

@@ -24,7 +24,6 @@
 #include <EEPROM.h>
 #include "DustCollector.h"
 #include "DustCollectorUI.h"
-#include "UnixTimeEditor.h"
 
 
 bool DustCollectorUI::sSDInsertedOrRemoved;
@@ -232,43 +231,48 @@ void DustCollectorUI::begin(
 	GoToSleep();
 }
 
+/************************** IncDecCurrentFieldOrItem **************************/
+// Used by UpDownButtonPressed for common up/down action
+bool DustCollectorUI::IncDecCurrentFieldOrItem(
+	bool	inIncrement,
+	uint8_t	inFirstItem,
+	uint8_t	inLastItem,
+	uint8_t	inParentMode,
+	uint8_t	inParentModeItem)
+{
+	bool	modeChanged = false;
+	if (inIncrement)
+	{
+		if (mCurrentFieldOrItem < inLastItem)
+		{
+			mCurrentFieldOrItem++;
+		} else
+		{
+			mCurrentFieldOrItem = inFirstItem;
+		}
+	} else if (mCurrentFieldOrItem > inFirstItem)
+	{
+		mCurrentFieldOrItem--;
+	} else
+	{
+		mCurrentFieldOrItem = inParentModeItem;
+		mMode = inParentMode;
+		modeChanged = true;
+	}
+	return(modeChanged);
+}
+
 const uint8_t	DustCollectorUI::kNextInfoField[] = {eInfoField0, 0, 0, eInfoField1, eGateNameField};
 const uint8_t	DustCollectorUI::kPrevInfoField[] = {eGateNamesItem, 0, 0, eGateNameField, eInfoField0};
 /**************************** UpDownButtonPressed *****************************/
 void DustCollectorUI::UpDownButtonPressed(
 	bool	inIncrement)
 {
-/*
-	Main Menu 0 1 2 3
-	Info 0 3 4
-	Gate Names 0 1, 2 3 if SD card inserted
-	Gate Sets 0 1, 2 if SD card inserted
-	Set Time handled by UnixTimeEditor
-*/
-	uint8_t	mode = mMode;
-	switch (mode)
+	//uint8_t	mode = mMode;
+	switch (mMode)
 	{
 		case eMainMenuMode:
-			if (inIncrement)
-			{
-				if (mCurrentFieldOrItem < eEnableSleepItem)
-				{
-					mCurrentFieldOrItem++;
-				} else
-				{
-					mCurrentFieldOrItem = eGateNamesItem;
-				}
-			} else if (mCurrentFieldOrItem > eGateNamesItem)
-			{
-				mCurrentFieldOrItem--;
-			/*
-			*	Else when pressing up from the top line, go to the info screen
-			*/
-			} else
-			{
-				//mCurrentFieldOrItem = eGateNameField;	same as eGateNamesItem
-				mode = eInfoMode;
-			}
+			IncDecCurrentFieldOrItem(inIncrement, eGateNamesItem, eEnableSleepItem, eInfoMode, eGateNameField);
 			break;
 		case eInfoMode:
 			/*
@@ -279,7 +283,7 @@ void DustCollectorUI::UpDownButtonPressed(
 				inIncrement == false)
 			{
 				//mCurrentFieldOrItem = eGateNamesItem;	same as eGateNameField
-				mode = eMainMenuMode;
+				mMode = eMainMenuMode;
 			} else
 			{
 				mCurrentFieldOrItem = inIncrement ? kNextInfoField[mCurrentFieldOrItem] :
@@ -287,64 +291,18 @@ void DustCollectorUI::UpDownButtonPressed(
 			}
 			break;
 		case eGateSensorsMode:
-			if (inIncrement)
-			{
-				if (mCurrentFieldOrItem < eLoadNamesFromSDItem)
-				{
-					mCurrentFieldOrItem++;
-				} else
-				{
-					mCurrentFieldOrItem = eResetItem;
-				}
-			} else if (mCurrentFieldOrItem > eResetItem)
-			{
-				mCurrentFieldOrItem--;
-			} else
-			{
-				mCurrentFieldOrItem = eGateNamesItem;
-				mode = eMainMenuMode;
-			}
+			IncDecCurrentFieldOrItem(inIncrement, eCheckGatesItem, eResetItem, eMainMenuMode, eGateNamesItem);
 			break;
 		case eGateSetsMode:
-			if (inIncrement)
-			{
-				if (mCurrentFieldOrItem < eSaveSetsToSDItem)
-				{
-					mCurrentFieldOrItem++;
-				} else
-				{
-					mCurrentFieldOrItem = eSaveCleanSetItem;
-				}
-			} else if (mCurrentFieldOrItem > eSaveCleanSetItem)
-			{
-				mCurrentFieldOrItem--;
-			} else
-			{
-				mCurrentFieldOrItem = eGateSetsItem;
-				mode = eMainMenuMode;
-			}
+			IncDecCurrentFieldOrItem(inIncrement, eSaveCleanSetItem, eResetSetsItem, eMainMenuMode, eGateSetsItem);
 			break;
 		case eSetTimeMode:
 			// The only way to get out of eSetTimeMode is to press enter.
 			mUnixTimeEditor.UpDownButtonPressed(inIncrement);
 			break;
 		case eBinMotorMode:
-			if (inIncrement)
+			if (IncDecCurrentFieldOrItem(inIncrement, eMotorSensitivityItem, eMotorControlItem, eMainMenuMode, eBinMotorItem))
 			{
-				if (mCurrentFieldOrItem < eMotorControlItem)
-				{
-					mCurrentFieldOrItem++;
-				} else
-				{
-					mCurrentFieldOrItem = eMotorSensitivityItem;
-				}
-			} else if (mCurrentFieldOrItem > eMotorSensitivityItem)
-			{
-				mCurrentFieldOrItem--;
-			} else
-			{
-				mCurrentFieldOrItem = eBinMotorItem;
-				mode = eMainMenuMode;
 				// When exiting the bin motor panel, don't leave the motor
 				// running if the collector is off.
 				if (mDustCollector->BinMotorIsRunning() &&
@@ -362,7 +320,7 @@ void DustCollectorUI::UpDownButtonPressed(
 			mCurrentFieldOrItem = mCurrentFieldOrItem == eVerifyNoItem ? eVerifyYesItem : eVerifyNoItem;
 			break;
 	}
-	mMode = mode;
+	//mMode = mode;
 }
 
 /******************************** EnterPressed ********************************/
@@ -1002,10 +960,10 @@ void DustCollectorUI::UpdateDisplay(void)
 				if (updateAll)
 				{
 					DrawCenteredList(0,
-						eResetItemDesc,
 						eCheckGatestemDesc,
 						eSaveToSDItemDesc,
 						eLoadFromSDItemDesc,
+						eResetItemDesc,
 						eTextListEnd);
 				}
 				break;
@@ -1015,8 +973,8 @@ void DustCollectorUI::UpdateDisplay(void)
 					DrawCenteredList(0,
 						eSaveCleanItemDesc,
 						eSaveDirtyItemDesc,
-						eResetItemDesc,
 						eSaveToSDItemDesc,
+						eResetItemDesc,
 						eTextListEnd);
 				}
 				break;
@@ -1041,7 +999,7 @@ void DustCollectorUI::UpdateDisplay(void)
 					mPrevMotorThreshold = motorThreshold;
 					DrawItemP(1, kMinusSignStr, eWhite, DCConfig::kTextInset + 10, true);
 					SetTextColor(eMagenta);
-					UInt8ToDecStr(motorThreshold, valueStr);
+					DCInfoField::UInt8ToDecStr(motorThreshold, valueStr);
 					DrawCentered(valueStr);
 					DrawItemP(1, kPlusSignStr, eWhite, 240 - DCConfig::kTextInset - 31);
 				}
@@ -1057,7 +1015,7 @@ void DustCollectorUI::UpdateDisplay(void)
 					mPrevBinMotorReading != binMotorReading)
 				{
 					mPrevBinMotorReading = binMotorReading;
-					UInt8ToDecStr(binMotorReading, valueStr);
+					DCInfoField::UInt8ToDecStr(binMotorReading, valueStr);
 					DrawItem(4, valueStr, eYellow, 160, true);
 				}
 				break;
@@ -1297,31 +1255,4 @@ void DustCollectorUI::DrawItemValueP(
 	DrawStr(textStr, true);
 }
 
-/******************************* UInt8ToDecStr ********************************/
-/*
-*	Returns the pointer to the char after the last char (the null terminator)
-*/
-char* DustCollectorUI::UInt8ToDecStr(
-	uint8_t	inNum,
-	char*	inBuffer)
-{
-	if (inNum == 0)
-	{
-		*(inBuffer++) = '0';
-	} else
-	{
-		int8_t num = inNum;
-		for (; num/=10; inBuffer++){}
-		char*	bufPtr = inBuffer;
-		while (inNum)
-		{
-			*(bufPtr--) = (inNum % 10) + '0';
-			inNum /= 10;
-		}
-		inBuffer++;
-	}
-	*inBuffer = 0;
-	
-	return(inBuffer);
-}
 

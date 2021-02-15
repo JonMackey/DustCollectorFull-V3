@@ -41,7 +41,7 @@
 //#define DEBUG_DELTAS	1
 #define SAMPLE_SIZE	8
 
-#define DEBUG_FRAMES		50
+//#define DEBUG_FRAMES		50
 #define CAN_QUEUE_SIZE		64
 
 class DustCollector : public MCP2515
@@ -150,6 +150,8 @@ public:
 								uint16_t				inReplaceExistingIndex = 0);
 	uint8_t					GetGateState(
 								uint16_t				inRecIndex) const;
+	uint32_t				OpenGates(void) const
+								{return(mOpenGates);}
 	bool					GateCheckDone(void) const
 								{return(mGateCheckDone);}
 	uint8_t					GetTriggerThreshold(void) const
