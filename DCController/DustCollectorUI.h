@@ -49,6 +49,9 @@ public:
 								Font*					inIconsFont);
 	
 	void					Update(void);
+	void					WakeUp(void);
+	void					GoToSleep(void);
+
 #ifdef DEBUG_DELTAS
 	bool					SaveDebug(void);
 #endif
@@ -64,6 +67,8 @@ protected:
 	UnixTimeEditor			mUnixTimeEditor;
 	DCInfoField				mDCInfoField0;
 	DCInfoField				mDCInfoField1;
+	DCInfoField				mDCInfoField2;
+	DCInfoField				mDCInfoField3;
 	AnimatedFontIcon		mMotorIcon;
 	MSPeriod				mDebouncePeriod;	// For buttons and SD card
 	MSPeriod				mSelectionPeriod;	// Selection frame flash rate
@@ -76,6 +81,8 @@ protected:
 	bool					mSleepEnabled;
 	bool					mPrevSleepEnabled;
 	bool					mPrevBinMotorIsRunning;
+	uint8_t					mSDAction;
+	uint8_t					mPrevSDAction;
 	uint8_t					mSelectionIndex;
 	uint8_t					mSavedMotorThreshold;
 	uint8_t					mPrevMotorThreshold;
@@ -92,6 +99,7 @@ protected:
 	uint8_t					mPrevMode;
 	uint8_t					mPrevStatus;
 	uint8_t					mPrevGateState;
+	uint8_t					mPrevGateSetIndex;
 	bool					mPrevDCIsRunning;
 	uint8_t					mSelectionFieldOrItem;
 
@@ -120,9 +128,6 @@ protected:
 								bool					inIncrement);
 	void					LeftRightButtonPressed(
 								bool					inIncrement);
-
-	void					WakeUp(void);
-	void					GoToSleep(void);
 
 	void					ClearLines(
 								uint8_t					inFirstLine,
@@ -196,24 +201,31 @@ protected:
 	};
 	enum EInfoField
 	{
-		eGateNameField,
-		eGateStateField,
 		eCollectorStatusField,
 		eInfoField0,
-		eInfoField1
+		eInfoField1,
+		eInfoField2,
+		eInfoField3
 	};
 	enum EGateSensorsMenuItem
 	{
+		eGateNameItem,
+		eGateStateField,
 		eCheckGatesItem,
-		eSaveNamesToSDItem,
-		eLoadNamesFromSDItem,
+		eSensorNamesSDActionItem,
 		eResetItem
+	};
+	enum ESDAction
+	{
+		eSaveToSD,
+		eLoadFromSD
 	};
 	enum EGateSetsMenuItem
 	{
 		eSaveCleanSetItem,
 		eSaveDirtySetItem,
 		eSaveSetsToSDItem,
+		eSendFilterMessageItem,
 		eResetSetsItem
 	};
 	enum EVerifyResetItem
@@ -233,7 +245,7 @@ protected:
 	{
 		eSensitivityTitleItem,
 		eMotorSensitivityItem,
-		eSaveSensitivityItem,
+		eSendFullMessageItem,
 		eMotorControlItem,
 		eMotorValueItem
 	};
@@ -273,14 +285,11 @@ protected:
 		eGateSetsItemDesc,
 		eSetTimeItemDesc,
 		eSleepItemDesc,
-		// Gate Sensors menu items
-		eSaveToSDItemDesc,
-		eLoadFromSDItemDesc,
-		eResetItemDesc,
-		eCheckGatestemDesc,
 		// Gate Sets menu items
+		eSaveToSDItemDesc,
 		eSaveCleanItemDesc,
 		eSaveDirtyItemDesc,
+		eResetItemDesc,
 		// Verify Reset Gates Yes/No
 		eRemoveAllItemDesc,
 		eYesItemDesc,
@@ -294,7 +303,7 @@ protected:
 		// Bin Motor items
 		eBinMotorDesc,
 		eSensitivityDesc,
-		eSaveDesc,
+		eTestSendDesc,
 		eMotorDesc,
 		eCurrentDesc,
 		eOffDesc,

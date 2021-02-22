@@ -41,6 +41,10 @@ public:
 								uint32_t				inMax);
 	void					SetValue(
 								uint32_t				inValue);
+	static uint16_t			GetColorForMinMaxValue(
+								uint32_t				inMin,
+								uint32_t				inMax,
+								uint32_t				inValue);
 	enum ESetup
 	{
 		eInset			= 13,		// Also defines the arrow dimensions (should be an odd number)

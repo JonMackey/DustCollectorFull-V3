@@ -41,15 +41,16 @@ const char kBinMotorStr[] PROGMEM = "BIN MOTOR";
 const char kSensitivityStr[] PROGMEM = "SENSITIVITY";
 const char kMinusSignStr[] PROGMEM = "-";
 const char kPlusSignStr[] PROGMEM = "+";
-const char kSaveStr[] PROGMEM = "SAVE";
+const char kTestSendStr[] PROGMEM = "TEST SEND";
 const char kMotorStr[] PROGMEM = "MOTOR";
 const char kCurrentStr[] PROGMEM = "CURRENT ";
 const char kOffStr[] PROGMEM = "OFF";
 const char kOnStr[] PROGMEM = "ON";
 
 // Gate Sensors menu items
-const char kSaveToSDStr[] PROGMEM = "SAVE TO SD";
-const char kLoadFromSDStr[] PROGMEM = "LOAD FROM SD";
+const char kNamesStr[] PROGMEM = "NAMES:";
+const char kSaveStr[] PROGMEM = "SAVE";
+const char kLoadStr[] PROGMEM = "LOAD";
 const char kResetStr[] PROGMEM = "RESET";
 const char kCheckGatesStr[] PROGMEM = "CHECK GATES";
 
@@ -57,7 +58,7 @@ const char kCheckGatesStr[] PROGMEM = "CHECK GATES";
 const char kSaveCleanStr[] PROGMEM = "SAVE CLEAN";
 const char kSaveDirtyStr[] PROGMEM = "SAVE DIRTY";
 //const char kNoSDCardStr[] PROGMEM = "NO SD CARD";
-//const char kSaveToSDStr[] PROGMEM = "SAVE TO SD";
+const char kSaveToSDStr[] PROGMEM = "SAVE TO SD";
 
 // Info gate status
 const char kOpenStr[] PROGMEM = "OPEN";
@@ -133,14 +134,11 @@ const SStringDesc kTextDesc[] PROGMEM =
 	{kGateSetsStr, XFont::eWhite},
 	{kSetTimeStr, XFont::eWhite},
 	{kSleepStr, XFont::eWhite},
-	// Gate Sensors menu items
-	{kSaveToSDStr, XFont::eWhite},
-	{kLoadFromSDStr, XFont::eWhite},
-	{kResetStr, XFont::eRed},
-	{kCheckGatesStr, XFont::eYellow},
 	// Gate Sets menu items
+	{kSaveToSDStr, XFont::eWhite},
 	{kSaveCleanStr, XFont::eWhite},
 	{kSaveDirtyStr, XFont::eWhite},
+	{kResetStr, XFont::eRed},
 	// Verify Reset Gates Yes/No
 	{kRemoveAllStr, XFont::eWhite},
 	{kYesStr, XFont::eGreen},
@@ -154,7 +152,7 @@ const SStringDesc kTextDesc[] PROGMEM =
 	// Bin Motor items
 	{kBinMotorStr, XFont::eWhite},
 	{kSensitivityStr, XFont::eWhite},
-	{kSaveStr, XFont::eGreen},
+	{kTestSendStr, XFont::eGreen},
 	{kMotorStr, XFont::eWhite},
 	{kCurrentStr, XFont::eWhite},
 	{kOffStr, XFont::eRed},
@@ -214,21 +212,25 @@ void DustCollectorUI::begin(
 	mPrevMode = 99;
 	mNormalFont = inNormalFont;
 	SetDisplay(inDisplay, inNormalFont);
-	mFilterStatusMeter.Initialize(mDisplay, 43*2, 50);
+	mFilterStatusMeter.Initialize(mDisplay, 0, 50);
 	mFilterStatusMeter.SetMinMax(
 		mDustCollector->GetGateSets().CurrentCleanPressure(),
 			mDustCollector->GetGateSets().CurrentDirtyPressure());
 	mUnixTimeEditor.Initialize(this);
 	{
-		mDCInfoField0.Initialize(this, inSmallFont, inDustCollector, 3,
-					DCConfig::k1stInfoDataPresetAddr, DCInfoField::eTimeInfo);
-		mDCInfoField1.Initialize(this, inSmallFont, inDustCollector, 4,
-					DCConfig::k2ndInfoDataPresetAddr, DCInfoField::eDateInfo);
+		mDCInfoField0.Initialize(this, inSmallFont, inDustCollector, 1,
+					0, DCInfoField::eDateInfo);
+		mDCInfoField1.Initialize(this, inSmallFont, inDustCollector, 2,
+					1, DCInfoField::eTimeInfo);
+		mDCInfoField2.Initialize(this, inSmallFont, inDustCollector, 3,
+					2, DCInfoField::eStaticInchesInfo);
+		mDCInfoField3.Initialize(this, inSmallFont, inDustCollector, 4,
+					3, DCInfoField::eMotorInfo);
 	}
-	mMotorIcon.Initialize(this, inIconsFont, (2*43)+8, 3, 'A', 'B', eWhite, eGray);
+	mMotorIcon.Initialize(this, inIconsFont, 8, 3, 'A', 'B', eWhite, eGray);
 	
 	GoToInfoMode();
-	GoToSleep();
+	//WakeUp();
 }
 
 /************************** IncDecCurrentFieldOrItem **************************/
@@ -262,8 +264,6 @@ bool DustCollectorUI::IncDecCurrentFieldOrItem(
 	return(modeChanged);
 }
 
-const uint8_t	DustCollectorUI::kNextInfoField[] = {eInfoField0, 0, 0, eInfoField1, eGateNameField};
-const uint8_t	DustCollectorUI::kPrevInfoField[] = {eGateNamesItem, 0, 0, eGateNameField, eInfoField0};
 /**************************** UpDownButtonPressed *****************************/
 void DustCollectorUI::UpDownButtonPressed(
 	bool	inIncrement)
@@ -272,26 +272,17 @@ void DustCollectorUI::UpDownButtonPressed(
 	switch (mMode)
 	{
 		case eMainMenuMode:
-			IncDecCurrentFieldOrItem(inIncrement, eGateNamesItem, eEnableSleepItem, eInfoMode, eGateNameField);
+			IncDecCurrentFieldOrItem(inIncrement, eGateNamesItem, eEnableSleepItem, eInfoMode, eInfoField0);
 			break;
 		case eInfoMode:
-			/*
-			*	If pressing up from the top line THEN
-			*	go to the main screen
-			*/
-			if (mCurrentFieldOrItem == eGateNameField &&
-				inIncrement == false)
-			{
-				//mCurrentFieldOrItem = eGateNamesItem;	same as eGateNameField
-				mMode = eMainMenuMode;
-			} else
-			{
-				mCurrentFieldOrItem = inIncrement ? kNextInfoField[mCurrentFieldOrItem] :
-												kPrevInfoField[mCurrentFieldOrItem];
-			}
+			IncDecCurrentFieldOrItem(inIncrement, eInfoField0, eInfoField3, eMainMenuMode, eGateNamesItem);
 			break;
 		case eGateSensorsMode:
-			IncDecCurrentFieldOrItem(inIncrement, eCheckGatesItem, eResetItem, eMainMenuMode, eGateNamesItem);
+			if (!IncDecCurrentFieldOrItem(inIncrement, eGateNameItem, eResetItem, eMainMenuMode, eGateNamesItem) &&
+				mCurrentFieldOrItem == eGateStateField)
+			{
+				mCurrentFieldOrItem = inIncrement ? eCheckGatesItem : eGateNameItem;
+			}
 			break;
 		case eGateSetsMode:
 			IncDecCurrentFieldOrItem(inIncrement, eSaveCleanSetItem, eResetSetsItem, eMainMenuMode, eGateSetsItem);
@@ -349,7 +340,26 @@ void DustCollectorUI::EnterPressed(void)
 		case eInfoMode:
 			switch (mCurrentFieldOrItem)
 			{
-				case eGateNameField:
+				case eInfoField0:
+					mDCInfoField0.SetPreset();
+					break;
+				case eInfoField1:
+					mDCInfoField1.SetPreset();
+					break;
+				case eInfoField2:
+					mDCInfoField2.SetPreset();
+					break;
+				case eInfoField3:
+					mDCInfoField3.SetPreset();
+					break;
+			}
+			break;
+		case eGateSensorsMode:
+		{
+			bool	success = false;
+			switch(mCurrentFieldOrItem)
+			{
+				case eGateNameItem:
 					if (mDustCollector->GetGateState(mUIGateIndex) != DustCollector::eErrorState)
 					{
 						mDustCollector->ToggleCurrentGateFlasher();
@@ -363,19 +373,6 @@ void DustCollectorUI::EnterPressed(void)
 						mCurrentFieldOrItem = eVerifyNoItem;
 					}
 					break;
-				case eInfoField0:
-					mDCInfoField0.SetPreset();
-					break;
-				case eInfoField1:
-					mDCInfoField1.SetPreset();
-					break;
-			}
-			break;
-		case eGateSensorsMode:
-		{
-			bool	success = false;
-			switch(mCurrentFieldOrItem)
-			{
 				case eResetItem:
 					mMode = eVerifyResetGatesMode;
 					mCurrentFieldOrItem = eVerifyNoItem;
@@ -384,28 +381,24 @@ void DustCollectorUI::EnterPressed(void)
 					mDustCollector->RequestAllGateStates();
 					mMode = eWaitingForGateCheckMode;
 					break;
-				case eSaveNamesToSDItem:
+				case eSensorNamesSDActionItem:
 					if (mSDCardPresent)
 					{
-						success = mDustCollector->GetGates().SaveToSD();
-						QueueMessage(success ? eSavedMessage : eSaveFailedMessage,
-							eNoMessage, eGateSensorsMode, eSaveNamesToSDItem);
+						if (mSDAction == eSaveToSD)
+						{
+							success = mDustCollector->GetGates().SaveToSD();
+							QueueMessage(success ? eSavedMessage : eSaveFailedMessage,
+								eNoMessage, eGateSensorsMode, eSensorNamesSDActionItem);
+						} else
+						{
+							success = mDustCollector->GetGates().LoadFromSD();
+							QueueMessage(success ? eLoadedMessage : eLoadFailedMessage,
+								eNoMessage, eGateSensorsMode, eSensorNamesSDActionItem);
+						}
 					} else
 					{
 						QueueMessage(eNoSDCardMessage,
-								eNoMessage, eGateSensorsMode, eSaveNamesToSDItem);
-					}
-					break;
-				case eLoadNamesFromSDItem:
-					if (mSDCardPresent)
-					{
-						success = mDustCollector->GetGates().LoadFromSD();
-						QueueMessage(success ? eLoadedMessage : eLoadFailedMessage,
-							eNoMessage, eGateSensorsMode, eLoadNamesFromSDItem);
-					} else
-					{
-						QueueMessage(eNoSDCardMessage,
-								eNoMessage, eGateSensorsMode, eLoadNamesFromSDItem);
+								eNoMessage, eGateSensorsMode, eSensorNamesSDActionItem);
 					}
 					break;
 			}
@@ -456,6 +449,10 @@ void DustCollectorUI::EnterPressed(void)
 								eNoMessage, eGateSetsMode, eSaveSetsToSDItem);
 					}
 					break;
+				case eSendFilterMessageItem:
+					mDustCollector->SendAudioAlertMessage(DCConfig::kFilterLoadedMessage);
+					break;
+
 			}
 			break;
 		}
@@ -488,10 +485,13 @@ void DustCollectorUI::EnterPressed(void)
 			}
 			break;
 		case eBinMotorMode:
-			if (mCurrentFieldOrItem == eSaveSensitivityItem)
+			if (mCurrentFieldOrItem == eMotorSensitivityItem)
 			{
 				mDustCollector->SaveTriggerThreshold();
 				mSavedMotorThreshold = mDustCollector->GetTriggerThreshold();
+			} else if (mCurrentFieldOrItem == eSendFullMessageItem)
+			{
+				mDustCollector->SendAudioAlertMessage(DCConfig::kFullMessage);
 			} else if (mCurrentFieldOrItem == eMotorControlItem)
 			{
 				mDustCollector->ToggleBinMotor();
@@ -518,7 +518,8 @@ void DustCollectorUI::EnterPressed(void)
 			{
 				mDustCollector->RemoveGate(mUIGateIndex);
 			}
-			GoToInfoMode();
+			mMode = eGateSensorsMode;
+			mCurrentFieldOrItem = eGateNameItem;
 			break;
 		case eMessageMode:
 			mDustCollector->UserAcknowledgedFault();
@@ -568,15 +569,29 @@ void DustCollectorUI::LeftRightButtonPressed(
 		case eInfoMode:
 			switch(mCurrentFieldOrItem)
 			{
-				case eGateNameField:
-					inIncrement ? mDustCollector->GetGates().Next() :
-									mDustCollector->GetGates().Previous();
-					break;
 				case eInfoField0:
 					mDCInfoField0.IncrementField(inIncrement);
 					break;
 				case eInfoField1:
 					mDCInfoField1.IncrementField(inIncrement);
+					break;
+				case eInfoField2:
+					mDCInfoField2.IncrementField(inIncrement);
+					break;
+				case eInfoField3:
+					mDCInfoField3.IncrementField(inIncrement);
+					break;
+			}
+			break;
+		case eGateSensorsMode:
+			switch(mCurrentFieldOrItem)
+			{
+				case eSensorNamesSDActionItem:
+					mSDAction = mSDAction == eSaveToSD ? eLoadFromSD:eSaveToSD;
+					break;
+				case eGateNameItem:
+					inIncrement ? mDustCollector->GetGates().Next() :
+									mDustCollector->GetGates().Previous();
 					break;
 			}
 			break;
@@ -624,7 +639,7 @@ void DustCollectorUI::Update(void)
 			bool	success = mDustCollector->UnresponsiveGates() == 0;
 			QueueMessage(success ? eGateCheckSuccessMessage : eGateCheckFailedMessage,
 				success ? eNoMessage : eCheckInfoMessage,
-				eInfoMode, eGateNameField);
+				eGateSensorsMode, eCheckGatesItem);
 		} else
 		{
 			return;
@@ -658,7 +673,7 @@ void DustCollectorUI::Update(void)
 			{
 				QueueMessage(status == DustCollector::eBinFull ?
 					eDustBinFullMessage : eFilterLoadedMessage, eNoMessage,
-						eInfoMode, eGateNameField);
+						eInfoMode, eInfoField0);
 			}
 		}
 	}
@@ -776,13 +791,10 @@ void DustCollectorUI::UpdateActions(void)
 	}
 	
 	/*
-	*	Wakeup the display when the dust collector is running OR
-	*	a gate was just opened or closed.
+	*	Wakeup the display when the dust collector is running.
 	*/
 	if (mDisplaySleeping &&
-		(mDustCollector->DCIsRunning() ||
-			mDustCollector->GetGates().GetCurrentIndex() != mUIGateIndex ||
-			mDustCollector->GetGateState(mUIGateIndex) != mPrevGateState))
+		mDustCollector->DCIsRunning())
 	{
 		WakeUp();
 	}
@@ -909,38 +921,20 @@ void DustCollectorUI::UpdateDisplay(void)
 			}
 			case eInfoMode:
 			{
-				Gates&		gates = mDustCollector->GetGates();
-				uint16_t	gateIndex = gates.GetCurrentIndex();
-				uint8_t		gateState = mDustCollector->GetGateState(gateIndex);
+				uint8_t	gateSetIndex = mDustCollector->GetGateSets().GetCurrentIndex();
 				if (updateAll ||
-					mUIGateIndex != gateIndex)
+					mPrevGateSetIndex != gateSetIndex)
 				{
-					mUIGateIndex = gateIndex;
-					ClearLines(eGateNameField, 1);
-					if (gateIndex)
-					{
-						SetTextColor(eWhite);
-						mDisplay->MoveToRow(DCConfig::kTextVOffset);
-						DrawCentered(gates.GetCurrent().name);
-					}
-				}
-				if (updateAll ||
-					mPrevGateState != gateState ||
-					gateIndex == 0)
-				{
-					mPrevGateState = gateState;
+					mPrevGateSetIndex = gateSetIndex;
 					mFilterStatusMeter.SetMinMax(
 						mDustCollector->GetGateSets().CurrentCleanPressure(),
 							mDustCollector->GetGateSets().CurrentDirtyPressure());
-					ClearLines(eGateStateField, 1);
-					if (gateIndex)
-					{
-						DrawCenteredList(eGateStateField, eClosedStateDesc+gateState, eTextListEnd);
-					}
 				}
 
 				mDCInfoField0.Update(updateAll);
 				mDCInfoField1.Update(updateAll);
+				mDCInfoField2.Update(updateAll);
+				mDCInfoField3.Update(updateAll);
 				
 				{
 					bool dcIsRunning = mDustCollector->DCIsRunning();
@@ -957,16 +951,47 @@ void DustCollectorUI::UpdateDisplay(void)
 				break;
 			}
 			case eGateSensorsMode:
+			{
+				Gates&		gates = mDustCollector->GetGates();
+				uint16_t	gateIndex = gates.GetCurrentIndex();
+				uint8_t		gateState = mDustCollector->GetGateState(gateIndex);
+				if (updateAll ||
+					mUIGateIndex != gateIndex)
+				{
+					mUIGateIndex = gateIndex;
+					ClearLines(eGateNameItem, 1);
+					if (gateIndex)
+					{
+						DrawCenteredItem(eGateNameItem, gates.GetCurrent().name, eWhite);
+					}
+				}
+				if (updateAll ||
+					mPrevGateState != gateState ||
+					gateIndex == 0)
+				{
+					mPrevGateState = gateState;
+					ClearLines(eGateStateField, 1);
+					if (gateIndex)
+					{
+						DrawCenteredDescP(eGateStateField, eClosedStateDesc+gateState);
+					}
+				}
 				if (updateAll)
 				{
-					DrawCenteredList(0,
-						eCheckGatestemDesc,
-						eSaveToSDItemDesc,
-						eLoadFromSDItemDesc,
-						eResetItemDesc,
-						eTextListEnd);
+					DrawCenteredItemP(eCheckGatesItem, kCheckGatesStr, eYellow);
+					DrawItemP(eSensorNamesSDActionItem, kNamesStr, eWhite);
+					DrawCenteredItemP(eResetItem, kResetStr, eRed);
+				}
+				if (updateAll ||
+					mSDAction != mPrevSDAction)
+				{
+					mPrevSDAction = mSDAction;
+					DrawItemP(eSensorNamesSDActionItem,
+							mSDAction == eSaveToSD ? kSaveStr:kLoadStr,
+								eMagenta, DCConfig::kTextInset + 126, true);
 				}
 				break;
+			}
 			case eGateSetsMode:
 				if (updateAll)
 				{
@@ -974,6 +999,7 @@ void DustCollectorUI::UpdateDisplay(void)
 						eSaveCleanItemDesc,
 						eSaveDirtyItemDesc,
 						eSaveToSDItemDesc,
+						eTestSendDesc,
 						eResetItemDesc,
 						eTextListEnd);
 				}
@@ -986,10 +1012,10 @@ void DustCollectorUI::UpdateDisplay(void)
 				char	valueStr[15];
 				if (updateAll)
 				{
-					DrawCenteredDescP(0, eSensitivityDesc);
-					DrawDescP(2, eSaveDesc);
-					DrawDescP(3, eMotorDesc);
-					DrawDescP(4, eCurrentDesc);
+					DrawCenteredDescP(eSensitivityTitleItem, eSensitivityDesc);
+					DrawDescP(eSendFullMessageItem, eTestSendDesc);
+					DrawDescP(eMotorControlItem, eMotorDesc);
+					DrawDescP(eMotorValueItem, eCurrentDesc);
 				}
 				
 				uint8_t	motorThreshold = mDustCollector->GetTriggerThreshold();
@@ -1016,7 +1042,9 @@ void DustCollectorUI::UpdateDisplay(void)
 				{
 					mPrevBinMotorReading = binMotorReading;
 					DCInfoField::UInt8ToDecStr(binMotorReading, valueStr);
-					DrawItem(4, valueStr, eYellow, 160, true);
+					DrawItem(4, valueStr, FilterStatusMeter::GetColorForMinMaxValue(
+						0, mDustCollector->GetTriggerThreshold(), binMotorReading),
+							160, true);
 				}
 				break;
 			}
@@ -1144,10 +1172,10 @@ void DustCollectorUI::GoToInfoMode(void)
 {
 	HideSelectionFrame();
 	if (mMode != eInfoMode ||
-		mCurrentFieldOrItem != eGateNameField)
+		mCurrentFieldOrItem != eInfoField0)
 	{
 		mMode = eInfoMode;
-		mCurrentFieldOrItem = eGateNameField;
+		mCurrentFieldOrItem = eInfoField0;
 		if (!mDisplaySleeping)
 		{
 			mUIGateIndex = 0;

@@ -38,7 +38,7 @@ public:
 								XFont::Font*			inSmallFont,
 								DustCollector*			inDustCollector,
 								uint8_t					inTextLine,
-								uint8_t					inPresetAddr,
+								uint8_t					inPresetIndex,
 								uint8_t					inPresetDefault);
 	void					Update(
 								bool					inUpdateAll);
@@ -58,7 +58,8 @@ public:
 		eStaticInchesInfo,
 		eTimeInfo,
 		eDateInfo,
-		eCurrentGateSet,
+		eGateSetInfo,
+		eMotorInfo,
 		eInfoCount
 	};
 	
@@ -68,13 +69,15 @@ protected:
 	XFont::Font*		mSmallFont;
 	uint8_t				mTextLine;
 	uint8_t				mDCInfo;
-	uint8_t				mPresetAddr;
+	uint8_t				mPresetIndex;
 	uint8_t				mPrevDCInfo;
 	uint8_t				mPrevGateSetIndex;
 	bool				mPrevGateSetMatch;
+	uint8_t				mPrevBinMotorReading;
 	uint32_t			mPrevAmbientPressure;
 	uint32_t			mPrevDuctPressure;
 	time32_t			mPrevDate;
+	time32_t			mPrevTime;
 
 	void					DrawPressure(
 								int32_t					inPressure,

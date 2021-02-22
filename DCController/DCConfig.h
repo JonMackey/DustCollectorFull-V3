@@ -67,8 +67,8 @@ namespace DCConfig
 	/*
 	*	EEPROM usage, 2K bytes
 	*
-	*	[0]		uint8_t		1st Info data preset (networkID on other boards)
-	*	[1]		uint8_t		2nd Info data preset (nodeID on other boards)
+	*	[0]		uint8_t		unused (networkID on other boards)
+	*	[1]		uint8_t		unused (nodeID on other boards)
 	*	[2]		uint8_t		flags, bit 0 is for 24 hour clock format on all boards.
 	*						0 = 24 hour
 	*	[3]		uint8_t		Dust bin motor trigger threshold.  The value at which
@@ -78,17 +78,28 @@ namespace DCConfig
 	*	Gates Data
 	*	[8]		SGateLink		gatesData[33]	// 32 gates + 1 root, 33 * 22 = 726
 	*	[734]	SGateSetLink	gateSetsData[33] // 32 gate sets + 1 root, 33 * 14 = 462
-	*	[1188]	uint8_t			unassigned[]
+	*	[1188]	uint8_t 		infoDataPresets[4]
+	*	[1192]	uint8_t			unassigned[]
+	*	[1200]	uint32_t		default clean delta
+	*	[1204]	uint32_t		default dirty delta
 	*/
-	const uint8_t	k1stInfoDataPresetAddr	= 0;
-	const uint8_t	k2ndInfoDataPresetAddr	= 1;
 	const uint16_t	kFlagsAddr	= 2;
 	const uint16_t	kMotorTriggerThresholdAddr	= 3;
 	const uint16_t	kGateBaseIDAddr = 4;
 	const uint16_t	kGatesDataAddr = 8;
+	const uint16_t	kInfoDataPresetAddr	= 1188;
+	const uint16_t	kDefaultCleanDeltaAddr	= 1200;
+	const uint16_t	kkDefaultDirtyDeltaAddr	= 1204;
 	
+	// Dust filter
+	const uint32_t	kPressureUpdatePeriod = 1500;	// in milliseconds
+	const uint8_t	kNumDeltas = 4;	// Number of deltas contained in mDeltaSum.
+	const uint8_t	kNumDeltaAvgs = 8;	// Number of Delta Averages representing
+						// averages over the period kNumDeltaAvgs*kPressureUpdatePeriod
 	
 	// Dust bin motor
+	const uint8_t	kBinMotorSampleSize = 8;
+	const uint32_t	kMotorSensePeriod = 500;	// in milliseconds
 	const uint8_t	kThresholdLowerLimit = 5;
 	const uint8_t	kDefaultTriggerThreshold = 15;
 	const uint8_t	kThresholdUpperLimit = 50;
@@ -98,6 +109,14 @@ namespace DCConfig
 	const uint16_t	kAudioAlertNodeID	= 1;	// ID of the audio alert gateway
 	const uint32_t	kFullMessage = 0x464344;	// DCF (big endian)
 	const uint32_t	kFilterLoadedMessage = 0x4C4344;	// DCL (big endian)
+	
+	// CAN
+	const uint8_t	kCANQueueSize		= 64;
+	const uint32_t	kControllerID = 0x20000;// b 0010 0000 0000 0000 0000
+	const uint32_t	kBroadcastID = 0x20001;
+	const uint32_t	kBaseIDMask = 0x3FFE0;	// b 0011 1111 1111 1110 0000
+	const uint32_t	kGateIndexMask = 0x1F;	// b				   1 1111
+	const uint32_t	kCANBusyPeriod = 200;			// in milliseconds
 
 	const uint8_t	kTextInset			= 3; // Makes room for drawing the selection frame
 	const uint8_t	kTextVOffset		= 6; // Makes room for drawing the selection frame

@@ -97,6 +97,29 @@ void FilterStatusMeter::SetValue(
 	}
 }
 
+/*************************** GetColorForMinMaxValue ***************************/
+/*
+*	Function to generate a color ranging from green to yellow to red.
+*/
+uint16_t FilterStatusMeter::GetColorForMinMaxValue(
+	uint32_t	inMin,
+	uint32_t	inMax,
+	uint32_t	inValue)
+{
+	uint8_t	pos;
+	if (inValue <= inMin)
+	{
+		pos = 0;
+	} else if (inValue >= inMax)
+	{
+		pos = eTransWidth - 1;
+	} else
+	{
+		pos = ((eTransWidth - 1)*128)/(((inMax - inMin)*128)/(inValue-inMin));
+	}
+	return(TransColorAtPos(pos));
+}
+
 /****************************** TransColorAtPos *******************************/
 uint16_t FilterStatusMeter::TransColorAtPos(
 	uint8_t	inPosition)

@@ -26,6 +26,7 @@
 #include "DustCollector.h"
 #include "BMP280Utils.h"
 #include "UnixTime.h"
+#include "FilterStatusMeter.h"
 
 const char kTitleChars[] PROGMEM = " DABSS";
 const char khPaSuffixStr[] PROGMEM = "hPa";
@@ -34,6 +35,8 @@ const char kUsingStr[] PROGMEM = "USING";
 const char kExactStr[] PROGMEM = "EXACT";
 const char kDefaultStr[] PROGMEM = "DEFAULT";
 const char kGateSetPrefixStr[] PROGMEM = "GS:";
+const char kMotorPrefixStr[] PROGMEM = "M:";
+const char kWarnPrefixStr[] PROGMEM = "WARN:";
 
 
 /******************************** DCInfoField *********************************/
@@ -47,18 +50,18 @@ void DCInfoField::Initialize(
 	XFont::Font*	inSmallFont,
 	DustCollector*	inDustCollector,
 	uint8_t			inTextLine,
-	uint8_t			inPresetAddr,
+	uint8_t			inPresetIndex,
 	uint8_t			inPresetDefault)
 {
 	mXFont = inXFont;
 	mSmallFont = inSmallFont;
 	mDustCollector = inDustCollector;
 	mTextLine = inTextLine;
-	mPresetAddr = inPresetAddr;
+	mPresetIndex = inPresetIndex;
 	{
 		uint8_t	preset;
-		EEPROM.get((uint16_t)inPresetAddr, preset);
-		if (preset > eDateInfo)
+		EEPROM.get(DCConfig::kInfoDataPresetAddr + inPresetIndex, preset);
+		if (preset >= eInfoCount)
 		{
 			preset = inPresetDefault;
 		}
@@ -95,7 +98,7 @@ void DCInfoField::IncrementField(
 /********************************* SetPreset **********************************/
 void DCInfoField::SetPreset(void)
 {
-	EEPROM.put((uint16_t)mPresetAddr, mDCInfo);
+	EEPROM.put(DCConfig::kInfoDataPresetAddr + mPresetIndex, mDCInfo);
 }
 
 // Prefix width = 31 ("D:" is the widest at 31.)
@@ -191,10 +194,22 @@ void DCInfoField::Update(
 				mXFont->GetDisplay()->MoveToColumn(162);
 				DrawItemP(mDCInfo != eStaticInchesInfo ? khPaSuffixStr : kInchesSuffixStr);
 			}
-		} else if (mDCInfo == eCurrentGateSet)
+		} else if (mDCInfo == eGateSetInfo)
 		{
 			mXFont->GetDisplay()->MoveToColumn(DCConfig::kTextInset);
 			DrawItemP(kGateSetPrefixStr);
+		} else if (mDCInfo == eMotorInfo)
+		{
+			char	valueStr[15];
+			mXFont->GetDisplay()->MoveToColumn(DCConfig::kTextInset);
+			DrawItemP(kMotorPrefixStr);
+			mXFont->SetTextColor(XFont::eRed);
+			mXFont->GetDisplay()->MoveToColumn(DCConfig::kTextInset+88);
+			DrawItemP(kWarnPrefixStr);
+			UInt8ToDecStr(mDustCollector->GetTriggerThreshold(), valueStr);
+			mXFont->GetDisplay()->MoveToColumn(DCConfig::kTextInset + 198);
+			mXFont->DrawStr(valueStr, true);
+			
 		}
 	}
 	switch (mDCInfo)
@@ -271,9 +286,11 @@ void DCInfoField::Update(
 			break;
 		}
 		case eTimeInfo:
-			if (UnixTime::TimeChanged())
+		{
+			time32_t	time = UnixTime::Time();
+			if (time != mPrevTime)
 			{
-				UnixTime::ResetTimeChanged();
+				mPrevTime = time;
 				char timeStr[32];
 				bool isPM = UnixTime::CreateTimeStr(timeStr);
 				MoveToTextTopLeft();
@@ -300,6 +317,7 @@ void DCInfoField::Update(
 				}
 			}
 			break;
+		}
 		case eDateInfo:
 		{
 			time32_t	date = UnixTime::Date();
@@ -316,7 +334,7 @@ void DCInfoField::Update(
 			}
 			break;
 		}
-		case eCurrentGateSet:
+		case eGateSetInfo:
 		{
 			GateSets&	gateSets = mDustCollector->GetGateSets();
 			uint8_t	currentGateSetIndex = gateSets.GetCurrentIndex();
@@ -346,6 +364,23 @@ void DCInfoField::Update(
 					setUsedStatusPtr = kDefaultStr;
 				}
 				DrawItemP(setUsedStatusPtr);
+			}
+			break;
+		}
+		case eMotorInfo:
+		{
+			uint8_t	binMotorReading = mDustCollector->GetBinMotorReading();
+			if (inUpdateAll ||
+				mPrevBinMotorReading != binMotorReading)
+			{
+				char	valueStr[15];
+				mPrevBinMotorReading = binMotorReading;
+				MoveToTextTopLeft();
+				UInt8ToDecStr(binMotorReading, valueStr);
+				mXFont->GetDisplay()->MoveToColumn(DCConfig::kTextInset + 44);
+				mXFont->SetTextColor(FilterStatusMeter::GetColorForMinMaxValue(0, mDustCollector->GetTriggerThreshold(), binMotorReading));
+				mXFont->DrawStr(valueStr);
+				mXFont->EraseTillColumn((88+DCConfig::kTextInset));
 			}
 			break;
 		}

@@ -27,7 +27,6 @@
 #include "BMP280SPI.h"
 #include "UnixTimeEditor.h"
 #include <EEPROM.h>
-#include "DCConfig.h"
 #include "DCMessages.h"
 /*
 	There were issues with the 16 MHz MCU consuming the CAN messages too slowly.
@@ -44,21 +43,14 @@
 //					The timing config is written CNF3, CNF2, CNF1
 const uint8_t	DustCollector::kTimingConfig[] = {0x07, 0xAC, 0x04}; // 40kHz CAN baud rate
 volatile bool	sMCP2515IntTriggered;
-const uint32_t	kControllerID = 0x20000;// b 0010 0000 0000 0000 0000
-const uint32_t	kBroadcastID = 0x20001;
-const uint32_t	kBaseIDMask = 0x3FFE0;	// b 0011 1111 1111 1110 0000
-const uint32_t	kGateIndexMask = 0x1F;	// b				   1 1111
-const uint32_t	kPressureUpdatePeriod = 1500;	// in milliseconds
-const uint32_t	kMotorSenseePeriod = 500;		// in milliseconds
-const uint32_t	kCANBusyPeriod = 200;			// in milliseconds
 
 /******************************* DustCollector ********************************/
 DustCollector::DustCollector(void)
   : MCP2515(DCConfig::kCANCSPin, DCConfig::kCANResetPin),
 	mBMP280Ambient(DCConfig::kBMP1CSPin), mBMP280Duct(DCConfig::kBMP0CSPin),
 	mRadio(DCConfig::kRadioNSSPin, DCConfig::kRadioIRQPin),
-	mPressureUpdatePeriod(kPressureUpdatePeriod), mMotorSensePeriod(kMotorSenseePeriod),
-	mFlashingGates(0), mCANBusyPeriod(kCANBusyPeriod), mDeltaAveragesLoaded(false),
+	mPressureUpdatePeriod(DCConfig::kPressureUpdatePeriod), mMotorSensePeriod(DCConfig::kMotorSensePeriod),
+	mFlashingGates(0), mCANBusyPeriod(DCConfig::kCANBusyPeriod), mDeltaAveragesLoaded(false),
 	mDeltaAverageIndex(0)
 {
 }
@@ -87,7 +79,7 @@ void DustCollector::begin(void)
 		*	A CAN extended ID is 18 bits.  Mask the 13 bit base ID, reserving the 5
 		*	least significant bits as the gate index.
 		*/
-		mGateBaseID &= kBaseIDMask;	
+		mGateBaseID &= DCConfig::kBaseIDMask;	
 		Serial.print(F("Gate base ID = 0x"));
 		Serial.println(mGateBaseID, HEX);
 		
@@ -183,7 +175,7 @@ void DustCollector::DoConfig(void)
 	*	received.
 	*/
 	{
-		CANFrame	filter(0, kControllerID);
+		CANFrame	filter(0, DCConfig::kControllerID);
 		// Set the filter to match just the controller ID
 		const uint8_t*	filterRawFrame = filter.GetRawFrame();
 		WriteReg(eRXF0Reg, 4, filterRawFrame);
@@ -217,10 +209,10 @@ void DustCollector::RemoveAllGates(void)
 {
 	// Increment the bits 15:5 of the 18 bit base ID by adding "1" to bit 5.
 	// Mask off any overflow with 0x3FFE0 when 0x3FFE0 increments to 0x40000.
-	mGateBaseID = (mGateBaseID + 0x20) & kBaseIDMask;
-	if (mGateBaseID == kControllerID)
+	mGateBaseID = (mGateBaseID + 0x20) & DCConfig::kBaseIDMask;
+	if (mGateBaseID == DCConfig::kControllerID)
 	{
-		mGateBaseID = kControllerID + 0x20;
+		mGateBaseID = DCConfig::kControllerID + 0x20;
 	}
 	EEPROM.put(DCConfig::kGateBaseIDAddr, mGateBaseID);
 	Serial.print(F("Setting Gate base ID to = 0x"));
@@ -394,7 +386,7 @@ void DustCollector::CheckFilter(void)
 		mPressureUpdatePeriod.Start();
 	
 		/*
-		*	The mDeltaSum is the sum of the last 4 deltas.
+		*	The mDeltaSum is the sum of the last kNumDeltas deltas.
 		*
 		*	The delta average is updated every 1.5 seconds.  This is the average
 		*	delta between the ambient and duct pressure readings when the dust
@@ -411,9 +403,9 @@ void DustCollector::CheckFilter(void)
 		*	when determining when the collector is running.  For comparisons,
 		*	like determining when the filter is loaded, the simple delta average
 		*	is used because there is no need to subtract the baseline provided
-		*	the both readings being compared are based on the simple delta
-		*	average.  If both readings are +10Pa, who cares?  It's only when you
-		*	need to display the value that the baseline needs to be subtracted.
+		*	both readings being compared are based on the simple delta average.
+		*	If both readings are +10Pa, who cares?  It's only when you need to
+		*	display the value that the baseline needs to be subtracted.
 		*
 		*	Whether to use the adjusted average may become an issue if the
 		*	baseline changes dramatically over time.
@@ -429,23 +421,26 @@ void DustCollector::CheckFilter(void)
 		{
 			/*
 			*	Member variables:
-			*	- mDelta[4] is an array containing the last 4 delta values.
-			*	- mDeltaSum is the sum of the 4 delta values in mDelta[].  The
-			*	mDeltaSum is only valid after mDelta contains all 4 values.
+			*	- mDelta[] is an array containing the last kNumDeltas delta values.
+			*	- mDeltaSum is the sum of the kNumDeltas delta values in mDelta[].  The
+			*	mDeltaSum is only valid after mDelta contains all kNumDeltas values.
 			*	- mDeltaSumLoaded is a flag indicating that the mDelta array
-			*	contains 4 values.
-			*	- mDeltaAverage[4] is an array containing the last 4 delta
-			*	averages over a timespan of 6 seconds.
+			*	contains kNumDeltas values.
+			*	- mDeltaAverage[] is an array containing the last kNumDeltaAvgs delta
+			*	averages over a timespan of kNumDeltaAvgs*kPressureUpdatePeriod milliseconds.
 			*	- mDeltaAveragesLoaded is a flag indicating that the
-			*	mDeltaAverage array contains 4 values.  The mDeltaAverage array
+			*	mDeltaAverage array contains kNumDeltaAvgs values.  The mDeltaAverage array
 			*	values aren't used to determine if the dust collector is running
 			*	till this is true.
 			*/
-			mDeltaSum = mDeltaSum - mDelta[mDeltaIndex & 3] + thisDelta;
-			mDelta[mDeltaIndex & 3] = thisDelta;
+			{
+				uint8_t	oldestDeltaIndex = mDeltaIndex % DCConfig::kNumDeltas;
+				mDeltaSum = mDeltaSum - mDelta[oldestDeltaIndex] + thisDelta;
+				mDelta[oldestDeltaIndex] = thisDelta;
+			}
 			mDeltaIndex++;
-			// deltaAverage is the average of the 4 values in mDelta.  This is
-			// calculated as mDeltaSum/4
+			// deltaAverage is the average of the kNumDeltas values in mDelta.
+			// This is calculated as mDeltaSum/kNumDeltas
 			int32_t	deltaAverage = DeltaAverage();
 	
 		#ifdef DEBUG_DELTAS
@@ -462,10 +457,10 @@ void DustCollector::CheckFilter(void)
 				/*
 				*	Calculate the adjusted average delta using the oldest delta
 				*	average.
-				*	(mDeltaAverageIndex & 3) = oldest average
+				*	(mDeltaAverageIndex % DCConfig::kNumDeltaAvgs) = oldest average
 				*/
 				int32_t	adjustedDeltaAverage = deltaAverage  -
-										mDeltaAverage[mDeltaAverageIndex & 3]; //AdjustedDeltaAverage();
+										mDeltaAverage[mDeltaAverageIndex % DCConfig::kNumDeltaAvgs]; //AdjustedDeltaAverage();
 				bool isRunning = adjustedDeltaAverage > 25;	// 100 = 1hPa
 				if (isRunning != mDCIsRunning)
 				{
@@ -495,12 +490,12 @@ void DustCollector::CheckFilter(void)
 						StopFlasher();
 					}
 				}
-			} else if (mDeltaAverageIndex > 4)
+			} else if (mDeltaAverageIndex >= DCConfig::kNumDeltaAvgs)
 			{
 				mDeltaAveragesLoaded = true;
 			}
 			/*
-			*	If mDeltaSum contains 4 deltas... (it generally does)
+			*	If mDeltaSum contains kNumDeltas...
 			*/ 
 			if (mDeltaSumLoaded)
 			{
@@ -524,10 +519,10 @@ void DustCollector::CheckFilter(void)
 				} else if (!mDCIsRunning)
 				{
 					// Set the oldest average to the newest.
-					mDeltaAverage[mDeltaAverageIndex & 3] = (int16_t)deltaAverage;
+					mDeltaAverage[mDeltaAverageIndex % DCConfig::kNumDeltaAvgs] = (int16_t)deltaAverage;
 					mDeltaAverageIndex++;	// The next average is now the oldest
 				}
-			} else if (mDeltaIndex > 4)
+			} else if (mDeltaIndex >= DCConfig::kNumDeltas)
 			{
 				mDeltaSumLoaded = true;
 			}
@@ -545,7 +540,7 @@ void DustCollector::CheckDustBinMotor(void)
 		uint16_t	oldestReading = mRingBuf[mRingBufIndex];
 		mRingBuf[mRingBufIndex] = reading;			// Save the newest reading
 		mRingBufIndex++;
-		if (mRingBufIndex >= SAMPLE_SIZE)
+		if (mRingBufIndex >= DCConfig::kBinMotorSampleSize)
 		{
 			mRingBufIndex = 0;
 		}
@@ -554,10 +549,10 @@ void DustCollector::CheckDustBinMotor(void)
 		*	use the paddle motor average voltage drop to determine if the motor
 		*	is overloaded due to shavings blocking the paddle path.
 		*/
-		if (mSampleCount >= SAMPLE_SIZE)
+		if (mSampleCount >= DCConfig::kBinMotorSampleSize)
 		{
 			mSampleAccumulator -= oldestReading;	// Remove the oldest reading
-			uint16_t average = mSampleAccumulator/SAMPLE_SIZE;
+			uint16_t average = mSampleAccumulator/DCConfig::kBinMotorSampleSize;
 			mBinMotorAverage = average;
 			/*
 			*	If the paddle motor doesn't have significant resistance THEN
@@ -737,7 +732,7 @@ void DustCollector::SendNextQueuedMessage(void)
 					AppendFrame(canFrame);
 				#endif
 					mGates.RemoveCurrent();
-					mCANMessageQueueHead = (mCANMessageQueueHead + 1) % CAN_QUEUE_SIZE;
+					mCANMessageQueueHead = (mCANMessageQueueHead + 1) % DCConfig::kCANQueueSize;
 				}
 			}
 			break;
@@ -763,7 +758,7 @@ void DustCollector::SendNextQueuedMessage(void)
 				canFrame.SetStandardID(0x201);	// Send set ID frame failed
 				AppendFrame(canFrame);
 			#endif
-				mCANMessageQueueHead = (mCANMessageQueueHead + 1) % CAN_QUEUE_SIZE;
+				mCANMessageQueueHead = (mCANMessageQueueHead + 1) % DCConfig::kCANQueueSize;
 			}
 			break;
 		}
@@ -773,7 +768,7 @@ void DustCollector::SendNextQueuedMessage(void)
 		*	aren't responding.
 		*/
 		case DCController::eCheckGateStateResponses:
-			mCANMessageQueueHead = (mCANMessageQueueHead + 1) % CAN_QUEUE_SIZE;
+			mCANMessageQueueHead = (mCANMessageQueueHead + 1) % DCConfig::kCANQueueSize;
 			mGateCheckDone = true;
 			break;
 		default:
@@ -783,7 +778,7 @@ void DustCollector::SendNextQueuedMessage(void)
 			AppendFrame(canFrame);
 		#endif
 			SendFrame(canFrame);
-			mCANMessageQueueHead = (mCANMessageQueueHead + 1) % CAN_QUEUE_SIZE;
+			mCANMessageQueueHead = (mCANMessageQueueHead + 1) % DCConfig::kCANQueueSize;
 			break;
 		}
 	}
@@ -879,7 +874,7 @@ void DustCollector::ToggleGateFlasher(
 void DustCollector::StopAllFlashingGateLEDs(void)
 {
 	return;
-	CANFrame	canFrame(DCController::eStopFlash, kBroadcastID);
+	CANFrame	canFrame(DCController::eStopFlash, DCConfig::kBroadcastID);
 #ifdef DEBUG_FRAMES
 	AppendFrame(canFrame);
 #endif
@@ -919,7 +914,7 @@ void DustCollector::RequestAllGateStates(void)
 /************************** ResetAllGatesToFactoryID **************************/
 void DustCollector::ResetAllGatesToFactoryID(void)
 {
-	CANFrame	canFrame(DCController::eSetFactoryID, kBroadcastID);
+	CANFrame	canFrame(DCController::eSetFactoryID, DCConfig::kBroadcastID);
 #ifdef DEBUG_FRAMES
 	AppendFrame(canFrame);
 #endif
@@ -947,12 +942,12 @@ void DustCollector::HandleReceivedFrame(
 		case DCSensor::eGateIsOpen:
 		case DCSensor::eGateIsClosed:
 			uint32_t	gateID = *(const uint32_t*)inCANFrame.GetData();
-			uint16_t	gateIndex = (gateID & kGateIndexMask) + 1;
+			uint16_t	gateIndex = (gateID & DCConfig::kGateIndexMask) + 1;
 			
 			/*
 			*	If gateID is invalid OR unregistered...
 			*/
-			if ((gateID & kBaseIDMask) != mGateBaseID ||
+			if ((gateID & DCConfig::kBaseIDMask) != mGateBaseID ||
 				 !mGates.IsValidIndex(gateIndex))
 			{
 				/*
@@ -987,12 +982,12 @@ void DustCollector::QueueCANMessage(
 	uint32_t	inID,
 	uint16_t	inCommand)
 {
-	uint8_t	nextTail = (mCANMessageQueueTail + 1) % CAN_QUEUE_SIZE;
+	uint8_t	nextTail = (mCANMessageQueueTail + 1) % DCConfig::kCANQueueSize;
 	if (nextTail != mCANMessageQueueHead)
 	{
 		/*
 		*	When the tail == head, the queue is empty.
-		*	When the ((tail+1) % CAN_QUEUE_SIZE) == head, the queue is full.
+		*	When the ((tail+1) % kCANQueueSize) == head, the queue is full.
 		*/
 		mCANMessageQueue[mCANMessageQueueTail].targetID = inID;
 		mCANMessageQueue[mCANMessageQueueTail].command = inCommand;

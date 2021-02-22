@@ -36,10 +36,10 @@
 #include "BMP280SPI.h"
 #include "RFM69.h"    // https://github.com/LowPowerLab/RFM69
 #include "MCP2515.h"
+#include "DCConfig.h"
 
 //#define DEBUG_MOTOR	1
 //#define DEBUG_DELTAS	1
-#define SAMPLE_SIZE	8
 
 //#define DEBUG_FRAMES		50
 #define CAN_QUEUE_SIZE		64
@@ -73,7 +73,7 @@ public:
 	uint32_t				DuctPressure(void) const
 								{return(mDuctPressure);}
 	inline int32_t			DeltaAverage(void) const
-								{return(mDeltaSum/4);}
+								{return(mDeltaSum/DCConfig::kNumDeltas);}
 	bool					DeltaAveragesLoaded(void) const
 								{return(mDeltaAveragesLoaded);}
 	bool					DCIsRunning(void) const
@@ -84,8 +84,8 @@ public:
 	void					ToggleBinMotor(void);
 	uint8_t					GetBinMotorReading(void) const
 								{return(mBinMotorAverage);}
-	int32_t					Baseline(void) const
-								{return(mDeltaAverage[mDeltaAverageIndex & 3]);}
+	int32_t					Baseline(void) const // Returns the oldest average
+								{return(mDeltaAverage[mDeltaAverageIndex % DCConfig::kNumDeltaAvgs]);}
 							// The adjusted delta average
 	inline int32_t			AdjustedDeltaAverage(void) const
 								{return(DeltaAverage() - Baseline());}
@@ -170,8 +170,8 @@ protected:
 	MSPeriod	mCANBusyPeriod;
 	MSPeriod	mPressureUpdatePeriod;
 	int32_t		mDeltaSum;
-	int32_t		mDelta[4];
-	int16_t		mDeltaAverage[4];
+	int32_t		mDelta[DCConfig::kNumDeltas];
+	int16_t		mDeltaAverage[DCConfig::kNumDeltaAvgs];
 	uint8_t		mDeltaIndex;
 	uint8_t		mDeltaAverageIndex;
 	bool		mDeltaSumLoaded;
@@ -195,7 +195,7 @@ protected:
 	MSPeriod	mMotorSensePeriod;
 
 	uint16_t	mSampleCount;
-	uint16_t	mRingBuf[SAMPLE_SIZE];
+	uint16_t	mRingBuf[DCConfig::kBinMotorSampleSize];
 	uint8_t		mRingBufIndex;
 	uint16_t	mSampleAccumulator;
 
@@ -206,7 +206,7 @@ protected:
 	{
 		uint32_t	targetID : 18,	// target ID
 					command : 14;
-	} mCANMessageQueue[CAN_QUEUE_SIZE];
+	} mCANMessageQueue[DCConfig::kCANQueueSize];
 	uint8_t		mCANMessageQueueHead;
 	uint8_t		mCANMessageQueueTail;
 	uint8_t	mNotUsed[32];

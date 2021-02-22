@@ -28,6 +28,7 @@
 #include <Arduino.h>
 #include "SdFat.h"
 #include "sdios.h"
+#include <EEPROM.h>
 #else
 #include <stdio.h>
 #endif
@@ -128,8 +129,17 @@ void GateSets::Dump(void)
 void GateSets::begin(void)
 {
 	mGateSets = &gateSetsDataStream;
-	mDefaultCleanDelta = DCConfig::kDefaultCleanDelta;
-	mDefaultDirtyDelta = DCConfig::kDefaultDirtyDelta;
+	EEPROM.get(DCConfig::kDefaultCleanDeltaAddr, mDefaultCleanDelta);
+	EEPROM.get(DCConfig::kkDefaultDirtyDeltaAddr, mDefaultDirtyDelta);
+	// If the EEPROM is unitialized THEN use the hard-coded defaults.
+	if (mDefaultCleanDelta > 0xFFFF)
+	{
+		mDefaultCleanDelta = DCConfig::kDefaultCleanDelta;
+	}
+	if (mDefaultDirtyDelta > 0xFFFF)
+	{
+		mDefaultDirtyDelta = DCConfig::kDefaultDirtyDelta;
+	}
 	if (mGateSets)
 	{
 		SGateSetRoot	root;
@@ -308,18 +318,30 @@ bool GateSets::SaveCleanSet(
 	uint32_t	inGateMask,
 	uint32_t	inCleanDelta)
 {
-	bool success = GoToGateSetWithMask(inGateMask);
-	if (inCleanDelta < mDefaultCleanDelta)
+	bool success = true;
+	if (inGateMask)
 	{
-		mDefaultCleanDelta = inCleanDelta;
-	}
-	if (success)
-	{
-		mCurrent.clean = inCleanDelta;
+		success = GoToGateSetWithMask(inGateMask);
+		if (inCleanDelta < mDefaultCleanDelta)
+		{
+			mDefaultCleanDelta = inCleanDelta;
+		}
+		if (success)
+		{
+			mCurrent.clean = inCleanDelta;
+		} else
+		{
+			SGateSetLink	gateSetLink = {0,0, inGateMask, inCleanDelta, mDefaultDirtyDelta};
+			success = Add(gateSetLink) != 0;
+		}
+	/*
+	*	Else, if there are no gates open, the assumption is that there are no
+	*	sensors.  In this case the default is updated.
+	*/
 	} else
 	{
-		SGateSetLink	gateSetLink = {0,0, inGateMask, inCleanDelta, mDefaultDirtyDelta};
-		success = Add(gateSetLink) != 0;
+		mDefaultCleanDelta = inCleanDelta;
+		EEPROM.put(DCConfig::kDefaultCleanDeltaAddr, inCleanDelta);
 	}
 	return(success);
 }
@@ -333,18 +355,30 @@ bool GateSets::SaveDirtySet(
 	uint32_t	inGateMask,
 	uint32_t	inDirtyDelta)
 {
-	bool success = GoToGateSetWithMask(inGateMask);
-	if (inDirtyDelta < mDefaultDirtyDelta)
+	bool success = true;
+	if (inGateMask)
 	{
-		mDefaultDirtyDelta = inDirtyDelta;
-	}
-	if (success)
-	{
-		mCurrent.dirty = inDirtyDelta;
+		success = GoToGateSetWithMask(inGateMask);
+		if (inDirtyDelta < mDefaultDirtyDelta)
+		{
+			mDefaultDirtyDelta = inDirtyDelta;
+		}
+		if (success)
+		{
+			mCurrent.dirty = inDirtyDelta;
+		} else
+		{
+			SGateSetLink	gateSetLink = {0,0, inGateMask, mDefaultCleanDelta, inDirtyDelta};
+			success = Add(gateSetLink) != 0;
+		}
+	/*
+	*	Else, if there are no gates open, the assumption is that there are no
+	*	sensors.  In this case the default is updated.
+	*/
 	} else
 	{
-		SGateSetLink	gateSetLink = {0,0, inGateMask, mDefaultCleanDelta, inDirtyDelta};
-		success = Add(gateSetLink) != 0;
+		mDefaultDirtyDelta = inDirtyDelta;
+		EEPROM.get(DCConfig::kkDefaultDirtyDeltaAddr, inDirtyDelta);
 	}
 	return(success);
 }
