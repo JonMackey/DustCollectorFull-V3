@@ -55,10 +55,11 @@ const char kResetStr[] PROGMEM = "RESET";
 const char kCheckGatesStr[] PROGMEM = "CHECK GATES";
 
 // Gate Sets menu items
-const char kSaveCleanStr[] PROGMEM = "SAVE CLEAN";
-const char kSaveDirtyStr[] PROGMEM = "SAVE DIRTY";
+const char kSaveCStr[] PROGMEM = "SAVE:";
+const char kCleanStr[] PROGMEM = "CLEAN";
+const char kDirtyStr[] PROGMEM = "DIRTY";
 //const char kNoSDCardStr[] PROGMEM = "NO SD CARD";
-const char kSaveToSDStr[] PROGMEM = "SAVE TO SD";
+const char kToSDStr[] PROGMEM = "TO SD";
 
 // Info gate status
 const char kOpenStr[] PROGMEM = "OPEN";
@@ -134,11 +135,6 @@ const SStringDesc kTextDesc[] PROGMEM =
 	{kGateSetsStr, XFont::eWhite},
 	{kSetTimeStr, XFont::eWhite},
 	{kSleepStr, XFont::eWhite},
-	// Gate Sets menu items
-	{kSaveToSDStr, XFont::eWhite},
-	{kSaveCleanStr, XFont::eWhite},
-	{kSaveDirtyStr, XFont::eWhite},
-	{kResetStr, XFont::eRed},
 	// Verify Reset Gates Yes/No
 	{kRemoveAllStr, XFont::eWhite},
 	{kYesStr, XFont::eGreen},
@@ -285,7 +281,7 @@ void DustCollectorUI::UpDownButtonPressed(
 			}
 			break;
 		case eGateSetsMode:
-			IncDecCurrentFieldOrItem(inIncrement, eSaveCleanSetItem, eResetSetsItem, eMainMenuMode, eGateSetsItem);
+			IncDecCurrentFieldOrItem(inIncrement, eSaveSetItem, eResetSetsItem, eMainMenuMode, eGateSetsItem);
 			break;
 		case eSetTimeMode:
 			// The only way to get out of eSetTimeMode is to press enter.
@@ -331,6 +327,9 @@ void DustCollectorUI::EnterPressed(void)
 				{
 					mCurrentFieldOrItem = eMotorSensitivityItem;
 					mSavedMotorThreshold = mDustCollector->GetTriggerThreshold();
+				} else if (mMode <= eGateSetsItem)
+				{
+					mSetAction = 0;	// Initial action is eSaveToSD or eSaveSetItem depending on mode.
 				}
 			} else
 			{
@@ -384,7 +383,7 @@ void DustCollectorUI::EnterPressed(void)
 				case eSensorNamesSDActionItem:
 					if (mSDCardPresent)
 					{
-						if (mSDAction == eSaveToSD)
+						if (mSetAction == eSaveToSD)
 						{
 							success = mDustCollector->GetGates().SaveToSD();
 							QueueMessage(success ? eSavedMessage : eSaveFailedMessage,
@@ -409,45 +408,47 @@ void DustCollectorUI::EnterPressed(void)
 			bool	success = false;
 			switch(mCurrentFieldOrItem)
 			{
-				case eSaveCleanSetItem:
-					if (mDustCollector->DCIsRunning())
+				case eSaveSetItem:
+					switch (mSetAction)
 					{
-						mDustCollector->SaveCleanSet();
-						QueueMessage(eCleanSetSavedMessage, eNoMessage,
-									eGateSetsMode, eSaveCleanSetItem);
-					} else
-					{
-						QueueMessage(eCollectorMessage,
-								eNotRunningMessage, eGateSetsMode, eSaveCleanSetItem);
-					}
-					break;
-				case eSaveDirtySetItem:
-					if (mDustCollector->DCIsRunning())
-					{
-						mDustCollector->SaveDirtySet();
-						QueueMessage(eDirtySetSavedMessage, eNoMessage,
-									eGateSetsMode, eSaveDirtySetItem);
-					} else
-					{
-						QueueMessage(eCollectorMessage,
-								eNotRunningMessage, eGateSetsMode, eSaveDirtySetItem);
+						case eSaveClean:
+						case eSaveDirty:
+							if (mDustCollector->DCIsRunning())
+							{
+								if (mSetAction == eSaveClean)
+								{
+									mDustCollector->SaveCleanSet();
+									QueueMessage(eCleanSetSavedMessage, eNoMessage,
+												eGateSetsMode, eSaveSetItem);
+								} else
+								{
+									mDustCollector->SaveDirtySet();
+									QueueMessage(eDirtySetSavedMessage, eNoMessage,
+												eGateSetsMode, eSaveSetItem);
+								}
+							} else
+							{
+								QueueMessage(eCollectorMessage,
+										eNotRunningMessage, eGateSetsMode, eSaveSetItem);
+							}
+							break;
+						case eSaveSetsToSD:
+							if (mSDCardPresent)
+							{
+								success = mDustCollector->GetGateSets().SaveToSD(mDustCollector->GetGates());
+								QueueMessage(success ? eSavedMessage : eSaveFailedMessage,
+												eNoMessage, eGateSetsMode, eSaveSetItem);
+							} else
+							{
+								QueueMessage(eNoSDCardMessage,
+										eNoMessage, eGateSetsMode, eSaveSetItem);
+							}
+							break;
 					}
 					break;
 				case eResetSetsItem:
 					mMode = eVerifyResetGateSetsMode;
 					mCurrentFieldOrItem = eVerifyNoItem;
-					break;
-				case eSaveSetsToSDItem:
-					if (mSDCardPresent)
-					{
-						success = mDustCollector->GetGateSets().SaveToSD(mDustCollector->GetGates());
-						QueueMessage(success ? eSavedMessage : eSaveFailedMessage,
-										eNoMessage, eGateSetsMode, eSaveSetsToSDItem);
-					} else
-					{
-						QueueMessage(eNoSDCardMessage,
-								eNoMessage, eGateSetsMode, eSaveSetsToSDItem);
-					}
 					break;
 				case eSendFilterMessageItem:
 					mDustCollector->SendAudioAlertMessage(DCConfig::kFilterLoadedMessage);
@@ -541,6 +542,9 @@ void DustCollectorUI::EnterPressed(void)
 }
 
 /******************************** QueueMessage ********************************/
+/*
+*	Not implemented as a queue.  Calling this supersedes the previous message.
+*/
 void DustCollectorUI::QueueMessage(
 	uint8_t	inMessageLine0,
 	uint8_t	inMessageLine1,
@@ -587,12 +591,33 @@ void DustCollectorUI::LeftRightButtonPressed(
 			switch(mCurrentFieldOrItem)
 			{
 				case eSensorNamesSDActionItem:
-					mSDAction = mSDAction == eSaveToSD ? eLoadFromSD:eSaveToSD;
+					mSetAction = mSetAction == eSaveToSD ? eLoadFromSD:eSaveToSD;
 					break;
 				case eGateNameItem:
 					inIncrement ? mDustCollector->GetGates().Next() :
 									mDustCollector->GetGates().Previous();
 					break;
+			}
+			break;
+		case eGateSetsMode:
+			if (mCurrentFieldOrItem == eSaveSetItem)
+			{
+				if (inIncrement)
+				{
+					if (mSetAction < eSaveSetsToSD)
+					{
+						mSetAction++;
+					} else
+					{
+						mSetAction = eSaveClean;
+					}
+				} else if (mSetAction > eSaveClean)
+				{
+					mSetAction--;
+				} else
+				{
+					mSetAction = eSaveSetsToSD;
+				}
 			}
 			break;
 		case eSetTimeMode:
@@ -983,11 +1008,11 @@ void DustCollectorUI::UpdateDisplay(void)
 					DrawCenteredItemP(eResetItem, kResetStr, eRed);
 				}
 				if (updateAll ||
-					mSDAction != mPrevSDAction)
+					mSetAction != mPrevSetAction)
 				{
-					mPrevSDAction = mSDAction;
+					mPrevSetAction = mSetAction;
 					DrawItemP(eSensorNamesSDActionItem,
-							mSDAction == eSaveToSD ? kSaveStr:kLoadStr,
+							mSetAction == eSaveToSD ? kSaveStr:kLoadStr,
 								eMagenta, DCConfig::kTextInset + 126, true);
 				}
 				break;
@@ -995,13 +1020,19 @@ void DustCollectorUI::UpdateDisplay(void)
 			case eGateSetsMode:
 				if (updateAll)
 				{
-					DrawCenteredList(0,
-						eSaveCleanItemDesc,
-						eSaveDirtyItemDesc,
-						eSaveToSDItemDesc,
-						eTestSendDesc,
-						eResetItemDesc,
-						eTextListEnd);
+					DrawItemP(eSaveSetItem, kSaveCStr, eWhite);
+					DrawCenteredDescP(eSendFilterMessageItem, eTestSendDesc);
+					DrawCenteredItemP(eResetSetsItem, kResetStr, eRed);
+				}
+				if (updateAll ||
+					mSetAction != mPrevSetAction)
+				{
+					mPrevSetAction = mSetAction;
+					// Display one of "CLEAN", "DIRTY" or "TO SD"
+					DrawItemP(eSaveSetItem,
+							mSetAction == eSaveClean ? kCleanStr:
+								(mSetAction == eSaveDirty ? kDirtyStr:kToSDStr),
+								eMagenta, DCConfig::kTextInset + 93, true);
 				}
 				break;
 			case eSetTimeMode:
@@ -1013,7 +1044,7 @@ void DustCollectorUI::UpdateDisplay(void)
 				if (updateAll)
 				{
 					DrawCenteredDescP(eSensitivityTitleItem, eSensitivityDesc);
-					DrawDescP(eSendFullMessageItem, eTestSendDesc);
+					DrawCenteredDescP(eSendFullMessageItem, eTestSendDesc);
 					DrawDescP(eMotorControlItem, eMotorDesc);
 					DrawDescP(eMotorValueItem, eCurrentDesc);
 				}

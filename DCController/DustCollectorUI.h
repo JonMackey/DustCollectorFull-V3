@@ -81,8 +81,8 @@ protected:
 	bool					mSleepEnabled;
 	bool					mPrevSleepEnabled;
 	bool					mPrevBinMotorIsRunning;
-	uint8_t					mSDAction;
-	uint8_t					mPrevSDAction;
+	uint8_t					mSetAction;	// Used by eGateSensorsMode and eGateSetsMode
+	uint8_t					mPrevSetAction;
 	uint8_t					mSelectionIndex;
 	uint8_t					mSavedMotorThreshold;
 	uint8_t					mPrevMotorThreshold;
@@ -222,12 +222,16 @@ protected:
 	};
 	enum EGateSetsMenuItem
 	{
-		eSaveCleanSetItem,
-		eSaveDirtySetItem,
-		eSaveSetsToSDItem,
+		eSaveSetItem,
 		eSendFilterMessageItem,
 		eResetSetsItem
 	};
+	enum ESaveSetAction
+	{
+		eSaveClean,
+		eSaveDirty,
+		eSaveSetsToSD
+	};	
 	enum EVerifyResetItem
 	{
 		eVerifyItem,
@@ -285,11 +289,6 @@ protected:
 		eGateSetsItemDesc,
 		eSetTimeItemDesc,
 		eSleepItemDesc,
-		// Gate Sets menu items
-		eSaveToSDItemDesc,
-		eSaveCleanItemDesc,
-		eSaveDirtyItemDesc,
-		eResetItemDesc,
 		// Verify Reset Gates Yes/No
 		eRemoveAllItemDesc,
 		eYesItemDesc,
