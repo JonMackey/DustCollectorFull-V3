@@ -285,7 +285,7 @@ void DustCollectorUI::UpDownButtonPressed(
 			break;
 		case eSetTimeMode:
 			// The only way to get out of eSetTimeMode is to press enter.
-			mUnixTimeEditor.UpDownButtonPressed(inIncrement);
+			mUnixTimeEditor.UpDownButtonPressed(!inIncrement);
 			break;
 		case eBinMotorMode:
 			if (IncDecCurrentFieldOrItem(inIncrement, eMotorSensitivityItem, eMotorControlItem, eMainMenuMode, eBinMotorItem))
@@ -483,6 +483,7 @@ void DustCollectorUI::EnterPressed(void)
 				}
 				mMode = eMainMenuMode;
 				mCurrentFieldOrItem = eSetTimeItem;
+				UnixTime::ResetSleepTime();	// Otherwise it will immediately go to sleep because of the time change
 			}
 			break;
 		case eBinMotorMode:
