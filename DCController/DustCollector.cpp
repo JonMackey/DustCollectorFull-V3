@@ -509,7 +509,7 @@ void DustCollector::CheckFilter(void)
 					*	If the average is greater than or equal to the dirty pressure THEN
 					*	set the status to filter full, start flasher, send message.
 					*/
-					if (deltaAverage >= mGateSets.CurrentDirtyPressure())
+					if (deltaAverage >= (int32_t)mGateSets.CurrentDirtyPressure())
 					{
 						mStatus = eFilterFull;
 						mFaultAcknowledged = false;
