@@ -51,7 +51,7 @@ DustCollector::DustCollector(void)
 	mRadio(DCConfig::kRadioNSSPin, DCConfig::kRadioIRQPin),
 	mPressureUpdatePeriod(DCConfig::kPressureUpdatePeriod), mMotorSensePeriod(DCConfig::kMotorSensePeriod),
 	mFlashingGates(0), mCANBusyPeriod(DCConfig::kCANBusyPeriod), mDeltaAveragesLoaded(false),
-	mDeltaAverageIndex(0)
+	mDeltaAverageIndex(0), mGateCheckDone(true)
 {
 }
 
@@ -89,6 +89,13 @@ void DustCollector::begin(void)
 		// EIMSK |= _BV(INT2); // Enable INT2
 	}
 
+	//mGates.RemoveAllGates();
+	mGates.begin();
+	//mGateSets.RemoveAllGateSets();
+	mGateSets.begin();
+	
+	mRadio.initialize(RF69_433MHZ, DCConfig::kNodeID, DCConfig::kNetworkID);
+	
 	/*
 	*	BMP280 pressure sensor setup
 	*/
@@ -115,13 +122,6 @@ void DustCollector::begin(void)
 		Serial.println(status);
 		mPressureUpdatePeriod.Start();	
 	}
-	
-	//mGates.RemoveAllGates();
-	mGates.begin();
-	//mGateSets.RemoveAllGateSets();
-	mGateSets.begin();
-	
-	mRadio.initialize(RF69_433MHZ, DCConfig::kNodeID, DCConfig::kNetworkID);
 	
 	StopFlasher();
 	mFaultAcknowledged = true;
@@ -326,6 +326,7 @@ void DustCollector::StopDustBinMotor(void)
 /******************************* ToggleBinMotor *******************************/
 void DustCollector::ToggleBinMotor(void)
 {
+	StopFlasher();
 	if (mMotorSensePeriod.Get())
 	{
 		StopDustBinMotor();
@@ -890,24 +891,27 @@ void DustCollector::StopAllFlashingGateLEDs(void)
 */
 void DustCollector::RequestAllGateStates(void)
 {
-	uint32_t	gatesMask = mGates.GatesMask();
-	mUnresponsiveGates = gatesMask;
-	mUnregisteredGateID = 0;
-	mGateCheckDone = false;
-	uint16_t	savedCurrent = mGates.GetCurrentIndex();
-	if (gatesMask)
+	if (mGates.GetCount())
 	{
-		uint8_t	gateIndex = 1;
-		for (; gatesMask; gatesMask >>= 1, gateIndex++)
+		uint32_t	gatesMask = mGates.GatesMask();
+		mUnresponsiveGates = gatesMask;
+		mUnregisteredGateID = 0;
+		mGateCheckDone = false;
+		uint16_t	savedCurrent = mGates.GetCurrentIndex();
+		if (gatesMask)
 		{
-			if (gatesMask & 1)
+			uint8_t	gateIndex = 1;
+			for (; gatesMask; gatesMask >>= 1, gateIndex++)
 			{
-				RequestGateState(gateIndex);
+				if (gatesMask & 1)
+				{
+					RequestGateState(gateIndex);
+				}
 			}
+			// Add an internal command to flag when to check to see if all of the
+			// gates have responded.  eCheckGateStateResponses is never sent on the bus.
+			QueueCANMessage(0, DCController::eCheckGateStateResponses);
 		}
-		// Add an internal command to flag when to check to see if all of the
-		// gates have responded.  eCheckGateStateResponses is never sent on the bus.
-		QueueCANMessage(0, DCController::eCheckGateStateResponses);
 	}
 }
 

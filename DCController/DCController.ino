@@ -72,16 +72,13 @@ void setup(void)
 	pinMode(DCConfig::kUnusedPinB1, INPUT_PULLUP);
 	pinMode(DCConfig::kUnusedPinB4, INPUT_PULLUP);
 	
-
-	dustCollector.begin();
-
 	display.begin(2, LOW); // Init TFT
+	dustCollector.begin();
 	display.Fill();
 	dustCollectorUI.begin(&dustCollector, &display,
 							&MyriadPro_Regular_36_1b::font,
 								&MyriadPro_Regular_18::font,
-									&DC_Icons::font);
-	
+									&DC_Icons::font);	
 }
 
 /************************************ loop ************************************/

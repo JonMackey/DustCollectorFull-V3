@@ -60,6 +60,7 @@ public:
 		eDateInfo,
 		eGateSetInfo,
 		eMotorInfo,
+		eSoftwareInfo,
 		eInfoCount
 	};
 	
@@ -73,6 +74,7 @@ protected:
 	uint8_t				mPrevDCInfo;
 	uint8_t				mPrevGateSetIndex;
 	bool				mPrevGateSetMatch;
+	bool				mPrevDCIsRunning;
 	uint8_t				mPrevBinMotorReading;
 	uint32_t			mPrevAmbientPressure;
 	uint32_t			mPrevDuctPressure;

@@ -269,6 +269,7 @@ protected:
 		eLoadedMessage,
 		eLoadFailedMessage,
 		eGateCheckSuccessMessage,
+		eGateCheckNoGatesMessage,
 		eGateCheckFailedMessage,
 		eCheckInfoMessage,
 		eCleanSetSavedMessage,

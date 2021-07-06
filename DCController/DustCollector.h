@@ -159,6 +159,8 @@ public:
 	void					SetTriggerThreshold(
 								uint8_t					inTriggerThreshold);
 	void					SaveTriggerThreshold(void);	// Save to EEPROM
+	void					StartFlasher(void);
+	void					StopFlasher(void);
 								
 #if 0
 	void					DoSerial(void);
@@ -227,8 +229,6 @@ protected:
 	virtual void			DoConfig(void);
 	void					HandleReceivedFrame(
 								CANFrame&				inCANFrame);
-	void					StartFlasher(void);
-	void					StopFlasher(void);
 	void					StartDustBinMotor(void);
 	void					StopDustBinMotor(void);
 	void					QueueCANMessage(

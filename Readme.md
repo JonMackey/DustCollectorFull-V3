@@ -8,3 +8,5 @@ The sensor board determines when a blast gate is open and sends message via CAN 
 
 See my 
 [Dust Collector Monitor](https://www.instructables.com/Duct-Collector-Monitor/) instructable for more information.
+
+# Till further notice use SDFat lib v1.1.0.  The current software isn't compatible with SDFat lib v2.

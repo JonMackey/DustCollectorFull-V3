@@ -37,6 +37,7 @@ const char kDefaultStr[] PROGMEM = "DEFAULT";
 const char kGateSetPrefixStr[] PROGMEM = "GS:";
 const char kMotorPrefixStr[] PROGMEM = "M:";
 const char kWarnPrefixStr[] PROGMEM = "WARN:";
+const char kVersionPrefixStr[] PROGMEM = "SW VER: ";
 
 
 /******************************** DCInfoField *********************************/
@@ -127,9 +128,9 @@ void DCInfoField::DrawPressure(
 void DCInfoField::DrawWaiting(void)
 {
 	mXFont->SetTextColor(XFont::eGray);
-	MoveToTextTopLeft();
-	mXFont->DrawRightJustified("---", 154+DCConfig::kTextInset);
+	MoveToTextTopLeft(DCConfig::kTextInset+31);	// 31 = widest of A:, B:, D:, S:
 	mXFont->EraseTillColumn(154+DCConfig::kTextInset);
+	mXFont->DrawRightJustified("---", 154+DCConfig::kTextInset);
 }
 
 /***************************** MoveToTextTopLeft ******************************/
@@ -210,6 +211,19 @@ void DCInfoField::Update(
 			mXFont->GetDisplay()->MoveToColumn(DCConfig::kTextInset + 198);
 			mXFont->DrawStr(valueStr, true);
 			
+		} else if (mDCInfo == eSoftwareInfo)
+		{
+			mXFont->GetDisplay()->MoveToColumn(DCConfig::kTextInset);
+			DrawItemP(kVersionPrefixStr);
+			char versStr[6];
+			versStr[0] = 'V';
+			versStr[1] = (DCM_SW_VER/100) + '0';
+			versStr[2] = '.';
+			versStr[3] = ((DCM_SW_VER%100)/10) + '0';
+			versStr[4] = (DCM_SW_VER%10) + '0';
+			versStr[5] = 0;
+			mXFont->SetTextColor(0xBDA9);
+			mXFont->DrawStr(versStr, true);
 		}
 	}
 	switch (mDCInfo)
@@ -245,6 +259,12 @@ void DCInfoField::Update(
 					break;
 				}
 			}
+			if (mPrevDCIsRunning != mDustCollector->DCIsRunning())
+			{
+				inUpdateAll = true;
+				mPrevDCIsRunning = !mPrevDCIsRunning;
+			}
+			
 			if (inUpdateAll ||
 				presChanged)
 			{

@@ -49,6 +49,7 @@ const char kOnStr[] PROGMEM = "ON";
 
 // Gate Sensors menu items
 const char kNamesStr[] PROGMEM = "NAMES:";
+//const char kNoGatesStr[] PROGMEM = "> NO GATES <";
 const char kSaveStr[] PROGMEM = "SAVE";
 const char kLoadStr[] PROGMEM = "LOAD";
 const char kResetStr[] PROGMEM = "RESET";
@@ -72,6 +73,7 @@ const char kSaveFailedStr[] PROGMEM = "SAVE FAILED";
 const char kLoadedStr[] PROGMEM = "LOADED";
 const char kLoadFailedStr[] PROGMEM = "LOAD FAILED";
 const char kAllGatesOKStr[] PROGMEM = "ALL GATES OK";
+const char kNoGatesRegOKStr[] PROGMEM = "NO GATES REG";
 const char kCheckFailedStr[] PROGMEM = "CHECK FAILED";
 const char kCheckInfoStr[] PROGMEM = "CHECK INFO";
 const char kCleanSavedStr[] PROGMEM = "CLEAN SAVED";
@@ -116,6 +118,7 @@ const SStringDesc kTextDesc[] PROGMEM =
 	{kLoadedStr, XFont::eGreen},
 	{kLoadFailedStr, XFont::eRed},
 	{kAllGatesOKStr, XFont::eGreen},
+	{kNoGatesRegOKStr, XFont::eYellow},
 	{kCheckFailedStr, XFont::eRed},
 	{kCheckInfoStr, XFont::eYellow},
 	{kCleanSavedStr, XFont::eGreen},
@@ -296,6 +299,9 @@ void DustCollectorUI::UpDownButtonPressed(
 					!mDustCollector->DCIsRunning())
 				{
 					mDustCollector->ToggleBinMotor();
+				} else
+				{
+					mDustCollector->StopFlasher();
 				}
 				// Restore the saved threshold.
 				mDustCollector->SetTriggerThreshold(mSavedMotorThreshold);
@@ -356,50 +362,56 @@ void DustCollectorUI::EnterPressed(void)
 		case eGateSensorsMode:
 		{
 			bool	success = false;
-			switch(mCurrentFieldOrItem)
+			if (mDustCollector->GetGates().GetCount())
 			{
-				case eGateNameItem:
-					if (mDustCollector->GetGateState(mUIGateIndex) != DustCollector::eErrorState)
-					{
-						mDustCollector->ToggleCurrentGateFlasher();
-					/*
-					*	Else present the option to remove this gate.
-					*	Note that this will also remove any gate sets that refer to this gate.
-					*/
-					} else
-					{
-						mMode = eVerifyGateRemovalMode;
-						mCurrentFieldOrItem = eVerifyNoItem;
-					}
-					break;
-				case eResetItem:
-					mMode = eVerifyResetGatesMode;
-					mCurrentFieldOrItem = eVerifyNoItem;
-					break;
-				case eCheckGatesItem:
-					mDustCollector->RequestAllGateStates();
-					mMode = eWaitingForGateCheckMode;
-					break;
-				case eSensorNamesSDActionItem:
-					if (mSDCardPresent)
-					{
-						if (mSetAction == eSaveToSD)
+				switch(mCurrentFieldOrItem)
+				{
+					case eGateNameItem:
+						if (mDustCollector->GetGateState(mUIGateIndex) != DustCollector::eErrorState)
 						{
-							success = mDustCollector->GetGates().SaveToSD();
-							QueueMessage(success ? eSavedMessage : eSaveFailedMessage,
-								eNoMessage, eGateSensorsMode, eSensorNamesSDActionItem);
+							mDustCollector->ToggleCurrentGateFlasher();
+						/*
+						*	Else present the option to remove this gate.
+						*	Note that this will also remove any gate sets that refer to this gate.
+						*/
 						} else
 						{
-							success = mDustCollector->GetGates().LoadFromSD();
-							QueueMessage(success ? eLoadedMessage : eLoadFailedMessage,
-								eNoMessage, eGateSensorsMode, eSensorNamesSDActionItem);
+							mMode = eVerifyGateRemovalMode;
+							mCurrentFieldOrItem = eVerifyNoItem;
 						}
-					} else
-					{
-						QueueMessage(eNoSDCardMessage,
-								eNoMessage, eGateSensorsMode, eSensorNamesSDActionItem);
-					}
-					break;
+						break;
+					case eResetItem:
+						mMode = eVerifyResetGatesMode;
+						mCurrentFieldOrItem = eVerifyNoItem;
+						break;
+					case eCheckGatesItem:
+						mDustCollector->RequestAllGateStates();
+						mMode = eWaitingForGateCheckMode;
+						break;
+					case eSensorNamesSDActionItem:
+							if (mSDCardPresent)
+							{
+								if (mSetAction == eSaveToSD)
+								{
+									success = mDustCollector->GetGates().SaveToSD();
+									QueueMessage(success ? eSavedMessage : eSaveFailedMessage,
+										eNoMessage, eGateSensorsMode, eSensorNamesSDActionItem);
+								} else
+								{
+									success = mDustCollector->GetGates().LoadFromSD();
+									QueueMessage(success ? eLoadedMessage : eLoadFailedMessage,
+										eNoMessage, eGateSensorsMode, eSensorNamesSDActionItem);
+								}
+							} else
+							{
+								QueueMessage(eNoSDCardMessage,
+										eNoMessage, eGateSensorsMode, eSensorNamesSDActionItem);
+							}
+						break;
+				}
+			} else
+			{
+				QueueMessage(eGateCheckNoGatesMessage, eNoMessage, eGateSensorsMode, mCurrentFieldOrItem);
 			}
 			break;
 		}
@@ -970,7 +982,7 @@ void DustCollectorUI::UpdateDisplay(void)
 						mMotorIcon.SetAnimationPeriod(dcIsRunning ? 750 : 0);
 					}
 					mMotorIcon.Update(updateAll);
-					mFilterStatusMeter.SetValue(dcIsRunning ? mDustCollector->DeltaAverage() : 0);
+					mFilterStatusMeter.SetValue(dcIsRunning ? abs(mDustCollector->AdjustedDeltaAverage()) : 0);
 					mFilterStatusMeter.Update(updateAll);
 				}
 				

@@ -24,6 +24,9 @@
 
 #include <inttypes.h>
 
+#define DCM_BOARD_VER	32		// v3.2
+//#define DCM_SW_VER		100	// v1.0	Initial version Jan 2021
+#define DCM_SW_VER		101		// v1.01 Completed support for working without sensors.
 namespace DCConfig
 {
 	// Pins ATmega644PA
